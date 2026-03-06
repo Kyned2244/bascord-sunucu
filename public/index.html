@@ -92,6 +92,12 @@
             #bascord-title-bar { display: none; }
             body { padding-top: 0; }
         }
+
+        /* Sürükleme kalkanını delip tıklamaları aktif eden kod (DÜZELTİLEN KISIM) */
+        .sidebar, .main, .chat-panel { 
+            -webkit-app-region: no-drag; 
+            pointer-events: auto; 
+        }
     </style>
 </head>
 <body>
