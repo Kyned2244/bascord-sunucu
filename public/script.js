@@ -3,20 +3,30 @@ const socket = io();
 // --- 1. CİHAZ TESPİTİ ---
 const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-// --- 2. HAFIZA VE İSİM ---
+// --- 2. HAFIZA VE İSİM (ÇÖKME HATASI DÜZELTİLDİ) ---
 let kullaniciAdi = localStorage.getItem('bascord_isim');
 if (!kullaniciAdi) {
-    kullaniciAdi = prompt("Bascord'a hoş geldin! İsmini belirle:") || "Anonim";
+    try {
+        // Telefonlar ve tarayıcılar için isim sorma kutusu
+        kullaniciAdi = prompt("Bascord'a hoş geldin! İsmini belirle:") || "Anonim";
+    } catch (e) {
+        // Electron (PC) prompt desteklemediği için çökmesin diye otomatik isim atanır
+        kullaniciAdi = "Gamer_" + Math.floor(Math.random() * 1000);
+    }
     localStorage.setItem('bascord_isim', kullaniciAdi);
 }
 document.getElementById('benimAdimGosterge').innerText = kullaniciAdi;
 document.getElementById('benimAvatarim').innerText = kullaniciAdi.charAt(0);
 
 document.getElementById('isimDegistirBtn').addEventListener('click', () => {
-    let yeniIsim = prompt("Yeni ismini gir:", kullaniciAdi);
-    if (yeniIsim && yeniIsim.trim() !== "") {
-        localStorage.setItem('bascord_isim', yeniIsim.trim());
-        location.reload();
+    try {
+        let yeniIsim = prompt("Yeni ismini gir:", kullaniciAdi);
+        if (yeniIsim && yeniIsim.trim() !== "") {
+            localStorage.setItem('bascord_isim', yeniIsim.trim());
+            location.reload();
+        }
+    } catch (e) {
+        alert("Masaüstü sürümünde isim değiştirme özelliği yakında eklenecektir!");
     }
 });
 
@@ -45,15 +55,10 @@ let onKameraMi = true;
 let senders = { kamera: null, ekran: null, mikrofon: null };
 let beklemedekiYayinlar = {}; 
 
-// YENİ: Limitsiz ve Kotasız TURN Sunucusu Entegre Edildi (Kopmalar Çözüldü)
 const stunSunuculari = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
     ]
 };
 
@@ -188,20 +193,14 @@ socket.on('konusma-durumu-geldi', (data) => parlamayiAyarla(data.id, data.durum)
 // --- 8. WEBRTC MÜHENDİSLİĞİ ---
 function trackEkleVeOptimizeEt(track, stream) {
     if (!peerConnection) return;
-    
     try {
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === track.kind);
-        if (sender) {
-            sender.replaceTrack(track);
-        } else {
-            const yeniSender = peerConnection.addTrack(track, stream);
-            if (track.kind === 'video' && !isMobile) {
-                track.contentHint = 'detail'; 
-            }
+        if (sender) sender.replaceTrack(track);
+        else {
+            peerConnection.addTrack(track, stream);
+            if (track.kind === 'video' && !isMobile) track.contentHint = 'detail'; 
         }
-    } catch(err) {
-        console.log("Track ekleme hatası:", err);
-    }
+    } catch(err) { console.log("Track hatası:", err); }
 }
 
 function yerlestirBekleyenYayin(streamId) {
@@ -301,11 +300,7 @@ mikrofonBtn.addEventListener('click', async () => {
     const ikon = document.getElementById('mik-icon');
     if (!mikrofonYayini) {
         try {
-            const sesAyarlari = {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            };
+            const sesAyarlari = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
             mikrofonYayini = await navigator.mediaDevices.getUserMedia({ audio: sesAyarlari });
             ikon.className = "fas fa-microphone";
             mikrofonBtn.classList.add("acik");
@@ -316,7 +311,6 @@ mikrofonBtn.addEventListener('click', async () => {
         mikrofonYayini.getTracks().forEach(t => t.stop());
         mikrofonYayini = null;
         if (senders.mikrofon) senders.mikrofon.replaceTrack(null);
-        
         ikon.className = "fas fa-microphone-slash";
         mikrofonBtn.classList.remove("acik");
         if (karsiKullaniciId) socket.emit('medya-durumu', { kime: karsiKullaniciId, tur: 'mik-kap' });
@@ -340,7 +334,6 @@ kameraBtn.addEventListener('click', async () => {
         kameraYayini.getTracks().forEach(t => t.stop());
         kameraYayini = null;
         if (senders.kamera) senders.kamera.replaceTrack(null); 
-        
         document.getElementById('kutu-yerelKamera').style.display = "none";
         ikon.className = "fas fa-video-slash";
         kameraBtn.classList.remove("acik");
@@ -352,73 +345,47 @@ kameraBtn.addEventListener('click', async () => {
 kameraCevirBtn.addEventListener('click', async () => {
     if (!kameraYayini) return;
     onKameraMi = !onKameraMi; 
-    
     kameraYayini.getTracks().forEach(t => t.stop());
     try {
         kameraYayini = await navigator.mediaDevices.getUserMedia({ video: { facingMode: onKameraMi ? "user" : "environment" } });
         document.getElementById('yerelKamera').srcObject = kameraYayini;
-        if (senders.kamera) {
-            senders.kamera.replaceTrack(kameraYayini.getVideoTracks()[0]);
-        }
+        if (senders.kamera) senders.kamera.replaceTrack(kameraYayini.getVideoTracks()[0]);
     } catch (e) { console.error("Kamera döndürme hatası:", e); }
 });
 
 ekranBtn.addEventListener('click', async () => {
     const ikon = document.getElementById('ekran-icon');
-    
     if (!ekranYayini) {
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                alert("📱 UYARI: Cihazınız ekran paylaşımını desteklemiyor. Lütfen linki kopyalayıp DOĞRUDAN CHROME VEYA SAFARİ uygulamasında açın.");
-                return;
+                alert("📱 UYARI: Cihazınız ekran paylaşımını desteklemiyor."); return;
             }
-
             let medyaAyarlari;
-            if (isMobile) {
-                medyaAyarlari = { video: true, audio: false }; 
-            } else {
+            if (isMobile) { medyaAyarlari = { video: true, audio: false }; } 
+            else {
                 const kaliteSecim = document.getElementById('kaliteSecici').value;
                 const videoAyarlari = kaliteSecim === "1080" ? 
                     { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } } : 
                     { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
-
-                medyaAyarlari = { 
-                    video: videoAyarlari, 
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    } 
-                };
+                medyaAyarlari = { video: videoAyarlari, audio: false };
             }
-
             ekranYayini = await navigator.mediaDevices.getDisplayMedia(medyaAyarlari);
-            
-            if(ekranYayini.getVideoTracks().length > 0 && !isMobile) {
-                ekranYayini.getVideoTracks()[0].contentHint = "detail";
-            }
-
+            if(ekranYayini.getVideoTracks().length > 0 && !isMobile) ekranYayini.getVideoTracks()[0].contentHint = "detail";
             const yerelEkran = document.getElementById('yerelEkran');
             yerelEkran.srcObject = ekranYayini;
             document.getElementById('kutu-yerelEkran').style.display = "block";
             yerelEkran.load(); 
-            
             ekranBtn.classList.add("acik");
             ikon.style.color = "#23a559";
-            
             yayiniKarsiyaGonder(ekranYayini, 'ekr-ac');
             ekranYayini.getVideoTracks()[0].onended = () => ekranBtn.click();
-            
         } catch (e) { 
-            if (e.name !== 'NotAllowedError') {
-                alert("Ekran paylaşılamadı. Lütfen linki Instagram/WhatsApp yerine Chrome uygulamasından açın.");
-            }
+            if (e.name !== 'NotAllowedError') alert("Ekran paylaşılamadı.");
         }
     } else {
         ekranYayini.getTracks().forEach(t => t.stop());
         ekranYayini = null;
         if (senders.ekran) senders.ekran.replaceTrack(null); 
-        
         document.getElementById('kutu-yerelEkran').style.display = "none";
         ekranBtn.classList.remove("acik");
         ikon.style.color = "#ed4245";
@@ -481,19 +448,25 @@ socket.on('kullanici-ayrildi', () => {
     if (peerConnection) { peerConnection.close(); peerConnection = null; }
 });
 
-// --- 11. MASAÜSTÜ (ELECTRON) PENCERE KONTROLLERİ ---
+// --- 11. MASAÜSTÜ (ELECTRON) PENCERE KONTROLLERİ (HATA KORUMALI) ---
 const minBtn = document.getElementById('min-btn');
 const closeBtn = document.getElementById('close-btn');
 const titleBar = document.getElementById('bascord-title-bar');
 
-// Eğer masaüstü uygulamasındaysak (Electron içindeysek)
-if (typeof require !== 'undefined') {
-    const { ipcRenderer } = require('electron');
-    
-    if (minBtn) minBtn.addEventListener('click', () => ipcRenderer.send('window-minimize'));
-    if (closeBtn) closeBtn.addEventListener('click', () => ipcRenderer.send('window-close'));
+if (!isMobile) {
+    // Bilgisayardaysak siyah çubuk kalsın ve tuşları aktif edelim
+    if (minBtn) {
+        minBtn.addEventListener('click', () => {
+            try { require('electron').ipcRenderer.send('window-minimize'); } catch(e) {}
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            try { require('electron').ipcRenderer.send('window-close'); } catch(e) { window.close(); }
+        });
+    }
 } else {
-    // Eğer telefondan Y.A.D.A. Chrome tarayıcısından giriliyorsa bu siyah çubuğu tamamen gizle
+    // Eğer telefondan giriliyorsa bu siyah çubuğu tamamen gizle
     if (titleBar) titleBar.style.display = 'none';
     document.body.style.paddingTop = '0';
 }
@@ -504,10 +477,8 @@ window.sekmeDegistir = function(sekme) {
     const chatPanel = document.querySelector('.chat-panel');
     const main = document.querySelector('.main');
     
-    // Tüm butonlardaki mavi 'aktif' rengini temizle
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     
-    // Hangi butona basıldıysa ilgili paneli aç
     if (sekme === 'kameralar') {
         document.getElementById('nav-kameralar').classList.add('active');
         if (window.innerWidth <= 850) {
