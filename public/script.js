@@ -480,3 +480,20 @@ socket.on('kullanici-ayrildi', () => {
     kontrolIsteBtn.style.display = "none";
     if (peerConnection) { peerConnection.close(); peerConnection = null; }
 });
+
+// --- 11. MASAÜSTÜ (ELECTRON) PENCERE KONTROLLERİ ---
+const minBtn = document.getElementById('min-btn');
+const closeBtn = document.getElementById('close-btn');
+const titleBar = document.getElementById('bascord-title-bar');
+
+// Eğer masaüstü uygulamasındaysak (Electron içindeysek)
+if (typeof require !== 'undefined') {
+    const { ipcRenderer } = require('electron');
+    
+    if (minBtn) minBtn.addEventListener('click', () => ipcRenderer.send('window-minimize'));
+    if (closeBtn) closeBtn.addEventListener('click', () => ipcRenderer.send('window-close'));
+} else {
+    // Eğer telefondan Y.A.D.A. Chrome tarayıcısından giriliyorsa bu siyah çubuğu tamamen gizle
+    if (titleBar) titleBar.style.display = 'none';
+    document.body.style.paddingTop = '0';
+}
