@@ -45,7 +45,17 @@ let onKameraMi = true;
 let senders = { kamera: null, ekran: null, mikrofon: null };
 let beklemedekiYayinlar = {}; 
 
-const stunSunuculari = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+// YENİ: Limitsiz ve Kotasız TURN Sunucusu Entegre Edildi (Kopmalar Çözüldü)
+const stunSunuculari = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
+    ]
+};
 
 // --- 4. VİDEO BÜYÜTME (TAM EKRAN) ---
 window.tamEkranYap = function(elementId) {
@@ -175,7 +185,7 @@ function parlamayiAyarla(id, durum) {
 }
 socket.on('konusma-durumu-geldi', (data) => parlamayiAyarla(data.id, data.durum));
 
-// --- 8. WEBRTC MÜHENDİSLİĞİ (SİYAH EKRAN ÇÖZÜLDÜ) ---
+// --- 8. WEBRTC MÜHENDİSLİĞİ ---
 function trackEkleVeOptimizeEt(track, stream) {
     if (!peerConnection) return;
     
@@ -186,7 +196,6 @@ function trackEkleVeOptimizeEt(track, stream) {
         } else {
             const yeniSender = peerConnection.addTrack(track, stream);
             if (track.kind === 'video' && !isMobile) {
-                // Siyah ekranı engellemek için sadece netlik ayarını tutuyoruz, maxBitrate zorlamasını kaldırdık.
                 track.contentHint = 'detail'; 
             }
         }
@@ -203,7 +212,7 @@ function yerlestirBekleyenYayin(streamId) {
         const ekranVid = document.getElementById('karsiEkran');
         ekranVid.srcObject = stream;
         document.getElementById('kutu-karsiEkran').style.display = "block";
-        ekranVid.load(); // SİYAH EKRANI ÖNLEMEK İÇİN GÖRÜNTÜYÜ ZORLA YÜKLETİR
+        ekranVid.load(); 
         ekranVid.play().catch(e=>e); 
         if (!isMobile) kontrolIsteBtn.style.display = "flex"; 
     } else if (streamId === kimlikler.kamera) {
@@ -354,7 +363,6 @@ kameraCevirBtn.addEventListener('click', async () => {
     } catch (e) { console.error("Kamera döndürme hatası:", e); }
 });
 
-// PC SESİ KAPANMASI ÇÖZÜLDÜ (suppressLocalAudioPlayback KALDIRILDI)
 ekranBtn.addEventListener('click', async () => {
     const ikon = document.getElementById('ekran-icon');
     
@@ -377,10 +385,9 @@ ekranBtn.addEventListener('click', async () => {
                 medyaAyarlari = { 
                     video: videoAyarlari, 
                     audio: { 
-                        echoCancellation: false, // Oyun sesini bozmamak için kapalı
+                        echoCancellation: false, 
                         noiseSuppression: false, 
                         autoGainControl: false 
-                        // BİLGİSAYARIN SESİNİN KAPANMASI (MUTE) HATASI BURADAN DÜZELTİLDİ!
                     } 
                 };
             }
@@ -394,7 +401,7 @@ ekranBtn.addEventListener('click', async () => {
             const yerelEkran = document.getElementById('yerelEkran');
             yerelEkran.srcObject = ekranYayini;
             document.getElementById('kutu-yerelEkran').style.display = "block";
-            yerelEkran.load(); // Kendi ekranımızda da siyah ekran olmasını engeller
+            yerelEkran.load(); 
             
             ekranBtn.classList.add("acik");
             ikon.style.color = "#23a559";
