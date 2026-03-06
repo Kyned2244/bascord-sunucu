@@ -3,14 +3,12 @@ const socket = io();
 // --- 1. CİHAZ TESPİTİ ---
 const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-// --- 2. HAFIZA VE İSİM (ÇÖKME HATASI DÜZELTİLDİ) ---
+// --- 2. HAFIZA VE İSİM ---
 let kullaniciAdi = localStorage.getItem('bascord_isim');
 if (!kullaniciAdi) {
     try {
-        // Telefonlar ve tarayıcılar için isim sorma kutusu
         kullaniciAdi = prompt("Bascord'a hoş geldin! İsmini belirle:") || "Anonim";
     } catch (e) {
-        // Electron (PC) prompt desteklemediği için çökmesin diye otomatik isim atanır
         kullaniciAdi = "Gamer_" + Math.floor(Math.random() * 1000);
     }
     localStorage.setItem('bascord_isim', kullaniciAdi);
@@ -18,7 +16,6 @@ if (!kullaniciAdi) {
 document.getElementById('benimAdimGosterge').innerText = kullaniciAdi;
 document.getElementById('benimAvatarim').innerText = kullaniciAdi.charAt(0);
 
-// İSİM DEĞİŞTİRME - YENİ MODAL SİSTEMİ
 document.getElementById('isimDegistirBtn').addEventListener('click', () => {
     const isimModal = document.getElementById('isimModal');
     const input = document.getElementById('yeniIsimInput');
@@ -36,7 +33,6 @@ document.getElementById('isimDegistirBtn').addEventListener('click', () => {
             }
         };
         
-        // Enter tuşuna basınca da kaydetsin
         input.onkeypress = (e) => {
             if (e.key === 'Enter') document.getElementById('isimKaydetBtn').click();
         };
@@ -65,7 +61,8 @@ let kimlikler = { kamera: null, ekran: null, mikrofon: null };
 let uzaktanKontrolIzniVerildi = false;
 let onKameraMi = true;
 
-let senders = { kamera: null, ekran: null, mikrofon: null };
+// YENİ: Ses ve Video kanallarını ayırmak için ekranVideo ve ekranSes eklendi
+let senders = { kamera: null, ekranVideo: null, ekranSes: null, mikrofon: null };
 let beklemedekiYayinlar = {}; 
 
 const stunSunuculari = {
@@ -75,14 +72,12 @@ const stunSunuculari = {
     ]
 };
 
-// --- 4. VİDEO BÜYÜTME (TAM EKRAN) ---
 window.tamEkranYap = function(elementId) {
     const videoElementi = document.getElementById(elementId);
     if (videoElementi.requestFullscreen) videoElementi.requestFullscreen();
     else if (videoElementi.webkitRequestFullscreen) videoElementi.webkitRequestFullscreen();
 };
 
-// --- 5. TEAMS UZAKTAN KONTROL ---
 if (!isMobile) {
     kontrolIsteBtn.addEventListener('click', () => {
         if (karsiKullaniciId) {
@@ -125,7 +120,6 @@ socket.on('karsi-fare-hareketi', (data) => {
     setTimeout(() => { lazerIsaretci.style.display = "none"; }, 2000);
 });
 
-// --- 6. SOHBET VE DOSYA ---
 function ekranaMesajYaz(isim, metin, benMi, resimMi = false) {
     const div = document.createElement('div');
     div.className = benMi ? 'msg-container benim' : 'msg-container';
@@ -163,7 +157,6 @@ dosyaSecici.addEventListener('change', (e) => {
 socket.on('yeni-mesaj', (data) => ekranaMesajYaz(data.ad, data.metin, false));
 socket.on('yeni-dosya', (data) => ekranaMesajYaz(data.ad, data.data, false, true));
 
-// --- 7. EFEKT PANOSU VE YEŞİL PARLAMA ---
 window.sesGonder = function(url) {
     new Audio(url).play();
     socket.emit('ses-efekti', url);
@@ -203,19 +196,6 @@ function parlamayiAyarla(id, durum) {
 }
 socket.on('konusma-durumu-geldi', (data) => parlamayiAyarla(data.id, data.durum));
 
-// --- 8. WEBRTC MÜHENDİSLİĞİ ---
-function trackEkleVeOptimizeEt(track, stream) {
-    if (!peerConnection) return;
-    try {
-        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === track.kind);
-        if (sender) sender.replaceTrack(track);
-        else {
-            peerConnection.addTrack(track, stream);
-            if (track.kind === 'video' && !isMobile) track.contentHint = 'detail'; 
-        }
-    } catch(err) { console.log("Track hatası:", err); }
-}
-
 function yerlestirBekleyenYayin(streamId) {
     const stream = beklemedekiYayinlar[streamId];
     if (!stream) return; 
@@ -245,7 +225,7 @@ function baglantiKoprusuKur(hedefId) {
     if(peerConnection) peerConnection.close(); 
     peerConnection = new RTCPeerConnection(stunSunuculari);
     
-    senders = { kamera: null, ekran: null, mikrofon: null };
+    senders = { kamera: null, ekranVideo: null, ekranSes: null, mikrofon: null };
 
     peerConnection.ontrack = (event) => {
         const stream = event.streams[0];
@@ -272,31 +252,41 @@ function baglantiKoprusuKur(hedefId) {
     if (ekranYayini) yayiniKarsiyaGonder(ekranYayini, 'ekr-ac');
 }
 
+// YENİ: Ses ve Video kanallarını aynı anda karşıya aktarma sistemi
 function yayiniKarsiyaGonder(stream, tur) {
     if (!peerConnection || !stream) return;
-    const track = stream.getTracks()[0]; 
 
     try {
         if (tur === 'mik-ac') {
-            if (senders.mikrofon) senders.mikrofon.replaceTrack(track); 
-            else senders.mikrofon = peerConnection.addTrack(track, stream); 
+            const track = stream.getAudioTracks()[0];
+            if (track) {
+                if (senders.mikrofon) senders.mikrofon.replaceTrack(track); 
+                else senders.mikrofon = peerConnection.addTrack(track, stream); 
+            }
         } 
         else if (tur === 'kam-ac') {
-            if (senders.kamera) senders.kamera.replaceTrack(track);
-            else senders.kamera = peerConnection.addTrack(track, stream);
+            const track = stream.getVideoTracks()[0];
+            if (track) {
+                if (senders.kamera) senders.kamera.replaceTrack(track);
+                else senders.kamera = peerConnection.addTrack(track, stream);
+            }
         } 
         else if (tur === 'ekr-ac') {
-            if (senders.ekran) senders.ekran.replaceTrack(track);
-            else {
-                senders.ekran = peerConnection.addTrack(track, stream);
-                if (!isMobile) track.contentHint = 'detail'; 
-            }
+            // Ekran paylaşımında hem VİDEO hem SES varsa ikisini de gönder
+            stream.getTracks().forEach(track => {
+                const senderName = track.kind === 'video' ? 'ekranVideo' : 'ekranSes';
+                if (senders[senderName]) {
+                    senders[senderName].replaceTrack(track);
+                } else {
+                    senders[senderName] = peerConnection.addTrack(track, stream);
+                    if (track.kind === 'video' && !isMobile) track.contentHint = 'detail'; 
+                }
+            });
         }
         socket.emit('medya-durumu', { kime: karsiKullaniciId, tur: tur, id: stream.id });
     } catch(err) { console.log("Track hatası:", err); }
 }
 
-// --- 9. ANA BUTONLAR ---
 kanalaKatilBtn.addEventListener('click', () => {
     kanalaKatilBtn.innerHTML = "<i class='fas fa-plug' style='font-size:16px;'></i> Bağlanıldı";
     kanalaKatilBtn.classList.add('active');
@@ -380,9 +370,14 @@ ekranBtn.addEventListener('click', async () => {
                 const videoAyarlari = kaliteSecim === "1080" ? 
                     { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } } : 
                     { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
-                medyaAyarlari = { video: videoAyarlari, audio: false };
+                
+                // YENİ: Bilgisayarda ekranı paylaşırken SİSTEM SESİNİ de talep et (audio: true)
+                medyaAyarlari = { video: videoAyarlari, audio: true };
             }
+            
+            // Bu komut masaüstünde yeni tasarladığımız seçici pencereyi tetikler
             ekranYayini = await navigator.mediaDevices.getDisplayMedia(medyaAyarlari);
+            
             if(ekranYayini.getVideoTracks().length > 0 && !isMobile) ekranYayini.getVideoTracks()[0].contentHint = "detail";
             const yerelEkran = document.getElementById('yerelEkran');
             yerelEkran.srcObject = ekranYayini;
@@ -390,15 +385,19 @@ ekranBtn.addEventListener('click', async () => {
             yerelEkran.load(); 
             ekranBtn.classList.add("acik");
             ikon.style.color = "#23a559";
+            
             yayiniKarsiyaGonder(ekranYayini, 'ekr-ac');
             ekranYayini.getVideoTracks()[0].onended = () => ekranBtn.click();
         } catch (e) { 
+            // Kullanıcı seçici menüden "İptal" e basarsa sessizce kapanır
             if (e.name !== 'NotAllowedError') alert("Ekran paylaşılamadı.");
         }
     } else {
         ekranYayini.getTracks().forEach(t => t.stop());
         ekranYayini = null;
-        if (senders.ekran) senders.ekran.replaceTrack(null); 
+        if (senders.ekranVideo) senders.ekranVideo.replaceTrack(null); 
+        if (senders.ekranSes) senders.ekranSes.replaceTrack(null); 
+        
         document.getElementById('kutu-yerelEkran').style.display = "none";
         ekranBtn.classList.remove("acik");
         ikon.style.color = "#ed4245";
@@ -419,7 +418,6 @@ gamerModBtn.addEventListener('click', () => {
     }
 });
 
-// --- 10. SİNYALLER VE LİSTELEME ---
 socket.on('kullanici-listesi', (liste) => {
     const listeKutusu = document.getElementById('aktifKullanicilarListesi');
     listeKutusu.innerHTML = "";
@@ -461,30 +459,53 @@ socket.on('kullanici-ayrildi', () => {
     if (peerConnection) { peerConnection.close(); peerConnection = null; }
 });
 
-// --- 11. MASAÜSTÜ (ELECTRON) PENCERE KONTROLLERİ (HATA KORUMALI) ---
 const minBtn = document.getElementById('min-btn');
 const closeBtn = document.getElementById('close-btn');
 const titleBar = document.getElementById('bascord-title-bar');
 
 if (!isMobile) {
-    // Bilgisayardaysak siyah çubuk kalsın ve tuşları aktif edelim
-    if (minBtn) {
-        minBtn.addEventListener('click', () => {
-            try { require('electron').ipcRenderer.send('window-minimize'); } catch(e) {}
+    const { ipcRenderer } = require('electron');
+    
+    if (minBtn) minBtn.addEventListener('click', () => { try { ipcRenderer.send('window-minimize'); } catch(e) {} });
+    if (closeBtn) closeBtn.addEventListener('click', () => { try { ipcRenderer.send('window-close'); } catch(e) { window.close(); } });
+
+    // --- YENİ EKRAN SEÇİCİ ARAYÜZ KONTROLLERİ ---
+    ipcRenderer.on('ekran-seciciyi-ac', (event, kaynaklar) => {
+        const modal = document.getElementById('ekranSeciciModal');
+        const liste = document.getElementById('ekranListesi');
+        liste.innerHTML = ""; 
+        
+        kaynaklar.forEach(kaynak => {
+            const div = document.createElement('div');
+            div.style = "width: 180px; background: #313338; border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: 0.2s;";
+            div.onmouseover = () => div.style.borderColor = "#5865F2";
+            div.onmouseout = () => div.style.borderColor = "transparent";
+            div.onclick = () => {
+                modal.style.display = "none";
+                // Seçilen pencereyi motora bildir
+                ipcRenderer.send('ekran-secildi', kaynak.id);
+            };
+            
+            div.innerHTML = `
+                <img src="${kaynak.thumbnail}" style="width: 100%; height: 100px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; background: black;">
+                <div style="color: #dbdee1; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${kaynak.name}">${kaynak.name}</div>
+            `;
+            liste.appendChild(div);
         });
-    }
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            try { require('electron').ipcRenderer.send('window-close'); } catch(e) { window.close(); }
-        });
-    }
+        
+        modal.style.display = "flex";
+    });
+
+    window.ekranPaylasiminiIptalEt = function() {
+        document.getElementById('ekranSeciciModal').style.display = "none";
+        ipcRenderer.send('ekran-secildi', null); 
+    };
+
 } else {
-    // Eğer telefondan giriliyorsa bu siyah çubuğu tamamen gizle
     if (titleBar) titleBar.style.display = 'none';
     document.body.style.paddingTop = '0';
 }
 
-// --- 12. MOBİL ALT MENÜ KONTROLLERİ ---
 window.sekmeDegistir = function(sekme) {
     const sidebar = document.querySelector('.sidebar');
     const chatPanel = document.querySelector('.chat-panel');
