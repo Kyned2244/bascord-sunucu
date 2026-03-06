@@ -497,3 +497,37 @@ if (typeof require !== 'undefined') {
     if (titleBar) titleBar.style.display = 'none';
     document.body.style.paddingTop = '0';
 }
+
+// --- 12. MOBİL ALT MENÜ KONTROLLERİ ---
+window.sekmeDegistir = function(sekme) {
+    const sidebar = document.querySelector('.sidebar');
+    const chatPanel = document.querySelector('.chat-panel');
+    const main = document.querySelector('.main');
+    
+    // Tüm butonlardaki mavi 'aktif' rengini temizle
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    
+    // Hangi butona basıldıysa ilgili paneli aç
+    if (sekme === 'kameralar') {
+        document.getElementById('nav-kameralar').classList.add('active');
+        if (window.innerWidth <= 850) {
+            sidebar.style.setProperty('display', 'none', 'important');
+            chatPanel.style.setProperty('display', 'none', 'important');
+            main.style.setProperty('display', 'flex', 'important');
+        }
+    } else if (sekme === 'sohbet') {
+        document.getElementById('nav-sohbet').classList.add('active');
+        if (window.innerWidth <= 850) {
+            sidebar.style.setProperty('display', 'none', 'important');
+            main.style.setProperty('display', 'none', 'important');
+            chatPanel.style.setProperty('display', 'flex', 'important');
+        }
+    } else if (sekme === 'ayarlar') {
+        document.getElementById('nav-ayarlar').classList.add('active');
+        if (window.innerWidth <= 850) {
+            main.style.setProperty('display', 'none', 'important');
+            chatPanel.style.setProperty('display', 'none', 'important');
+            sidebar.style.setProperty('display', 'flex', 'important');
+        }
+    }
+};
