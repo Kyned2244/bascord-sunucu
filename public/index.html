@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bascord Premium</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #2b2d31; }
+        ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4e5058; }
+
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background-color: #1e1f22; color: #dbdee1; overflow: hidden; }
+        
+        .sidebar { width: 280px; background-color: #2b2d31; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 2px 0 15px rgba(0,0,0,0.3); z-index: 10; border-right: 1px solid #1f2123; }
+        .server-header { padding: 22px; font-weight: 800; border-bottom: 1px solid #1f2123; font-size: 17px; color: #fff; display: flex; align-items: center; justify-content: space-between; background: linear-gradient(180deg, #2b2d31 0%, #232428 100%); }
+        
+        .channels { padding: 15px 12px; }
+        .channel { padding: 12px 15px; border-radius: 8px; color: #949ba4; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; font-weight: 600; border: none; background: #202225; width: 100%; text-align: left; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .channel:hover { background-color: #35373c; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .channel.active { background-color: #5865F2; color: #ffffff; box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4); }
+
+        .user-list-header { font-size: 12px; font-weight: 800; color: #80848e; text-transform: uppercase; padding: 15px 15px 5px; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+        .list-item { display: flex; align-items: center; gap: 12px; padding: 8px 15px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 6px; margin: 2px 10px; transition: 0.2s; color: #b5bac1; }
+        .list-item:hover { background-color: #35373c; color: #fff; }
+        .list-avatar { width: 34px; height: 34px; background: linear-gradient(135deg, #5865F2, #4752c4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white; border: 2px solid transparent; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .list-avatar.speaking { border-color: #23a559; box-shadow: 0 0 15px rgba(35, 165, 89, 0.8); transform: scale(1.05); }
+
+        .sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 15px; }
+        .side-btn { border: 1px solid #1f2123; padding: 10px; border-radius: 8px; cursor: pointer; color: white; font-weight: 600; transition: all 0.2s; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #313338; }
+        .side-btn:hover { background: #4e5058; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+
+        .user-panel { background-color: #1a1b1e; padding: 15px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #2b2d31; }
+        .controls { display: flex; gap: 8px; }
+        .controls button { background: #2b2d31; border: none; color: #ed4245; font-size: 18px; cursor: pointer; border-radius: 50%; transition: all 0.3s; display: flex; justify-content: center; align-items: center; width: 44px; height: 44px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .controls button:hover { background-color: #35373c; transform: scale(1.05); }
+        .controls button.acik { color: #23a559; background: rgba(35, 165, 89, 0.1); }
+
+        .main { flex: 1; padding: 25px; display: flex; flex-direction: column; overflow-y: auto; background: radial-gradient(circle at top, #313338 0%, #1e1f22 100%); }
+        .top-bar { padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; background: rgba(43, 45, 49, 0.7); backdrop-filter: blur(12px); border-radius: 12px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        
+        .video-grid { display: flex; flex-wrap: wrap; gap: 25px; width: 100%; max-width: 1600px; margin: 0 auto; justify-content: center; }
+        .video-wrapper { position: relative; background: #000; border-radius: 16px; overflow: hidden; border: 1px solid #35373c; box-shadow: 0 10px 30px rgba(0,0,0,0.5); aspect-ratio: 16/9; width: 46%; min-width: 320px; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .video-wrapper:hover { transform: translateY(-5px); border-color: #5865F2; box-shadow: 0 15px 35px rgba(88, 101, 242, 0.2); }
+        video { width: 100%; height: 100%; object-fit: contain; display: block; }
+        
+        .video-label { position: absolute; bottom: 15px; left: 15px; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; color: white; border: 1px solid rgba(255,255,255,0.1); }
+        .video-overlay { position: absolute; top: 15px; right: 15px; display: flex; gap: 10px; opacity: 0; transition: opacity 0.3s ease; }
+        .video-wrapper:hover .video-overlay { opacity: 1; }
+        .overlay-btn { background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .overlay-btn:hover { background: #5865F2; border-color: #5865F2; transform: scale(1.05); }
+
+        #remote-pointer { position: fixed; width: 22px; height: 22px; background: #ed4245; border: 3px solid white; border-radius: 50%; pointer-events: none; display: none; z-index: 99999; box-shadow: 0 0 20px #ed4245, 0 0 40px #ed4245; transform: translate(-50%, -50%); animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); } }
+
+        .chat-panel { width: 350px; background-color: #2b2d31; border-left: 1px solid #1f2123; display: flex; flex-direction: column; box-shadow: -2px 0 15px rgba(0,0,0,0.2); }
+        .chat-header { padding: 22px; font-weight: 800; border-bottom: 1px solid #1f2123; color: #fff; background: linear-gradient(180deg, #2b2d31 0%, #232428 100%); display: flex; justify-content: space-between; align-items: center; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        .msg-container { display: flex; flex-direction: column; background: #313338; padding: 12px 15px; border-radius: 12px; border-bottom-left-radius: 2px; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .msg-container.benim { background: rgba(88, 101, 242, 0.1); border-bottom-left-radius: 12px; border-bottom-right-radius: 2px; border: 1px solid rgba(88, 101, 242, 0.2); align-self: flex-end; }
+        
+        .chat-input-box { background: #383a40; margin: 15px 20px 25px; border-radius: 12px; display: flex; align-items: center; padding: 8px 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #4e5058; transition: 0.3s; }
+        .chat-input-box:focus-within { border-color: #5865F2; box-shadow: 0 0 10px rgba(88, 101, 242, 0.2); }
+        .chat-input-box input { flex: 1; background: transparent; border: none; color: #dbdee1; padding: 12px 10px; outline: none; font-size: 15px; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .modal-content { background: #2b2d31; padding: 30px; border-radius: 12px; width: 400px; border: 1px solid #4e5058; box-shadow: 0 10px 40px rgba(0,0,0,0.5); color: #dbdee1; }
+        .modal-content h3 { margin-top: 0; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .modal-close { background: #5865F2; border: none; color: white; padding: 10px 20px; border-radius: 6px; cursor: pointer; float: right; font-weight: bold; margin-top: 20px; }
+
+        @media (max-width: 850px) {
+            html, body { overflow-y: auto !important; height: auto !important; min-height: 100vh; display: block !important; }
+            .sidebar { width: 100%; height: auto !important; display: block !important; border-right: none; }
+            .main { width: 100%; height: auto !important; display: block !important; padding: 15px; padding-bottom: 30px; overflow: visible !important; }
+            .video-grid { display: flex; flex-direction: column; width: 100%; gap: 15px; }
+            .video-wrapper { width: 100%; min-width: 100%; }
+            .chat-panel { width: 100%; height: 500px !important; display: flex !important; border-left: none; margin-bottom: 90px; border-top: 1px solid #1f2123; }
+            .user-panel { position: fixed; bottom: 0; left: 0; width: 100%; z-index: 99999; box-shadow: 0 -10px 30px rgba(0,0,0,0.6); }
+            .video-overlay { opacity: 1; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ipucuModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-lightbulb" style="color:#faa61a;"></i> Oyun Penceresi Gözükmüyor mu?</h3>
+            <p>Oyunlar genellikle tarayıcıdan gizlenen <b>"Tam Ekran"</b> modunda açılır. Oyununu arkadaşına izletmek için şu iki yöntemden birini yapmalısın:</p>
+            <ul style="line-height:1.6; padding-left:20px;">
+                <li>Oyunun grafik ayarlarına girip "Tam Ekran" yerine <b>"Pencereli Tam Ekran" (Borderless Windowed)</b> seçeneğini seç.</li>
+                <li>Veya tarayıcını (Chrome) kapatıp sağ tıklayarak <b>"Yönetici Olarak Çalıştır"</b>.</li>
+            </ul>
+            <button class="modal-close" onclick="document.getElementById('ipucuModal').style.display='none'">Anladım</button>
+        </div>
+    </div>
+
+    <div id="remote-pointer"></div>
+    <audio id="karsiSes" autoplay playsinline></audio>
+
+    <div class="sidebar">
+        <div class="server-header"><span style="display:flex; align-items:center; gap:8px;"><i class="fas fa-meteor" style="color:#5865F2; font-size:20px;"></i> Bascord Premium</span> <span id="kisiSayaci" style="font-size:12px; color:#23a559; background:rgba(35,165,89,0.15); padding:4px 10px; border-radius:12px; font-weight:700;">0 Online</span></div>
+        
+        <div class="channels">
+            <button class="channel" id="kanalaKatilBtn"><i class="fas fa-headphones" style="font-size:16px;"></i> Ses Kanalına Katıl</button>
+            <button id="gamerModBtn" class="channel" style="background: linear-gradient(135deg, #faa61a, #e68d00); color:white; display:none;"><i class="fas fa-gamepad" style="font-size:16px;"></i> Gamer Mod</button>
+        </div>
+        
+        <div class="user-list-header">🎵 Efekt Panosu</div>
+        <div class="sb-grid">
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/air-horn-club-remix-short.mp3')" class="side-btn"><i class="fas fa-bullhorn" style="color:#faa61a"></i> Korna</button>
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/applause-8.mp3')" class="side-btn"><i class="fas fa-hands-clapping" style="color:#5865F2"></i> Alkış</button>
+        </div>
+        
+        <div class="user-list-header">👥 Odadakiler</div>
+        <div id="aktifKullanicilarListesi" style="flex:1; padding-bottom:10px;"></div>
+
+        <div class="user-panel">
+            <div style="display:flex; align-items:center; cursor:pointer;" id="isimDegistirBtn" title="İsmi Değiştir">
+                <div id="benimAvatarim" class="list-avatar" style="width:40px; height:40px; font-size:16px;">?</div>
+                <div style="margin-left:12px; line-height:1.3;">
+                    <span id="benimAdimGosterge" style="font-weight:700; font-size:15px; color:#fff;">...</span><br>
+                    <span style="color:#949ba4; font-size:12px; font-weight:600;"><i class="fas fa-cog"></i> Ayarlar</span>
+                </div>
+            </div>
+            <div class="controls">
+                <button id="mikrofonBtn" disabled title="Mikrofon"><i class="fas fa-microphone-slash" id="mik-icon"></i></button>
+                <button id="kameraBtn" disabled title="Kamera Aç"><i class="fas fa-video-slash" id="kam-icon"></i></button>
+                <button id="kameraCevirBtn" style="display:none; color:#dbdee1;" title="Arka Kameraya Geç"><i class="fas fa-sync-alt"></i></button>
+                <button id="ekranBtn" disabled title="Ekran Paylaş"><i class="fas fa-desktop" id="ekran-icon"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="top-bar">
+            <span style="color:#fff; font-weight:800; font-size:16px; display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-hashtag" style="color:#80848e;"></i> genel-ses-kanali
+                <i class="fas fa-info-circle" style="color:#faa61a; font-size:14px; margin-left:10px; cursor:pointer;" onclick="document.getElementById('ipucuModal').style.display='flex'" title="Oyun Yayını İpuçları"></i>
+            </span>
+            <select id="kaliteSecici" style="background:#1e1f22; color:#fff; border:1px solid #4e5058; padding:8px 15px; border-radius:8px; font-weight:700; cursor:pointer; outline:none; font-size:14px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+                <option value="1080">1080p Ultra HD (Net Yayın)</option>
+                <option value="720">720p HD (Hızlı)</option>
+            </select>
+        </div>
+        
+        <div class="video-grid">
+            <div class="video-wrapper" id="kutu-yerelKamera" style="display:none;">
+                <video id="yerelKamera" autoplay playsinline muted></video>
+                <div class="video-label">Sen</div>
+                <div class="video-overlay"><button class="overlay-btn" onclick="tamEkranYap('yerelKamera')"><i class="fas fa-expand"></i> Büyüt</button></div>
+            </div>
+            
+            <div class="video-wrapper" id="kutu-karsiKamera" style="display:none;">
+                <video id="karsiKamera" autoplay playsinline></video>
+                <div class="video-label">Arkadaşın</div>
+                <div class="video-overlay"><button class="overlay-btn" onclick="tamEkranYap('karsiKamera')"><i class="fas fa-expand"></i> Büyüt</button></div>
+            </div>
+            
+            <div class="video-wrapper" id="kutu-yerelEkran" style="display:none;">
+                <video id="yerelEkran" autoplay playsinline muted></video>
+                <div class="video-label">Senin Ekranın</div>
+                <div class="video-overlay"><button class="overlay-btn" onclick="tamEkranYap('yerelEkran')"><i class="fas fa-expand"></i> Büyüt</button></div>
+            </div>
+            
+            <div class="video-wrapper" id="kutu-karsiEkran" style="display:none;">
+                <video id="karsiEkran" autoplay playsinline></video>
+                <div class="video-label" style="background:rgba(88,101,242,0.8);">Arkadaşın Ekranı</div>
+                <div class="video-overlay">
+                    <button class="overlay-btn" id="kontrolIsteBtn" style="background:#23a559; border-color:#23a559; display:none;"><i class="fas fa-hand-pointer"></i> Kontrol Et</button>
+                    <button class="overlay-btn" onclick="tamEkranYap('karsiEkran')"><i class="fas fa-expand"></i> Büyüt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-panel">
+        <div class="chat-header">💬 Takım Sohbeti</div>
+        <div class="chat-messages" id="mesajGecmisi">
+            <div style="text-align:center; color:#949ba4; font-size:13px; margin-top:10px; font-weight:600;">Odaya hoş geldiniz! Şifreleme aktif.</div>
+        </div>
+        <div class="chat-input-box">
+            <label for="dosyaSecici" style="cursor:pointer; margin-right:15px; font-size:20px; color:#b5bac1; transition:0.3s;"><i class="fas fa-plus-circle hover-bright"></i></label>
+            <input type="file" id="dosyaSecici" style="display:none;" accept="image/*">
+            <input type="text" id="mesajKutusu" placeholder="Sohbete mesaj gönder...">
+            <button id="mesajGonderBtn" style="background:none; border:none; color:#5865F2; font-size:20px; cursor:pointer; padding:0; transition:0.3s;"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
