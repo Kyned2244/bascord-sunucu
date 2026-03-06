@@ -136,6 +136,16 @@
             <button class="modal-close" onclick="document.getElementById('ipucuModal').style.display='none'">Anladım</button>
         </div>
     </div>
+    <div id="isimModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-user-edit" style="color:#5865F2;"></i> İsmini Değiştir</h3>
+            <input type="text" id="yeniIsimInput" style="width:100%; box-sizing:border-box; padding:12px; margin-top:15px; background:#1e1f22; border:1px solid #4e5058; color:white; border-radius:8px; font-size:15px; outline:none;" placeholder="Yeni isminiz...">
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                <button class="modal-close" style="background:#4e5058; margin-top:0;" onclick="document.getElementById('isimModal').style.display='none'">İptal</button>
+                <button class="modal-close" id="isimKaydetBtn" style="margin-top:0; background:#23a559;">Kaydet</button>
+            </div>
+        </div>
+    </div>
 
     <div id="remote-pointer"></div>
     <audio id="karsiSes" autoplay playsinline></audio>

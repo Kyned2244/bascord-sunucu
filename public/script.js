@@ -18,15 +18,28 @@ if (!kullaniciAdi) {
 document.getElementById('benimAdimGosterge').innerText = kullaniciAdi;
 document.getElementById('benimAvatarim').innerText = kullaniciAdi.charAt(0);
 
+// İSİM DEĞİŞTİRME - YENİ MODAL SİSTEMİ
 document.getElementById('isimDegistirBtn').addEventListener('click', () => {
-    try {
-        let yeniIsim = prompt("Yeni ismini gir:", kullaniciAdi);
-        if (yeniIsim && yeniIsim.trim() !== "") {
-            localStorage.setItem('bascord_isim', yeniIsim.trim());
-            location.reload();
-        }
-    } catch (e) {
-        alert("Masaüstü sürümünde isim değiştirme özelliği yakında eklenecektir!");
+    const isimModal = document.getElementById('isimModal');
+    const input = document.getElementById('yeniIsimInput');
+    
+    if (isimModal && input) {
+        input.value = kullaniciAdi;
+        isimModal.style.display = 'flex';
+        input.focus();
+        
+        document.getElementById('isimKaydetBtn').onclick = () => {
+            let yeniIsim = input.value.trim();
+            if (yeniIsim !== "") {
+                localStorage.setItem('bascord_isim', yeniIsim);
+                location.reload();
+            }
+        };
+        
+        // Enter tuşuna basınca da kaydetsin
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') document.getElementById('isimKaydetBtn').click();
+        };
     }
 });
 
