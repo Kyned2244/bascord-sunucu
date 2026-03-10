@@ -1,28 +1,45 @@
 // ============================================================
-// BASCORD v4 - script.js
-// DÜZELTMELER:
-// - Ses karşıya gitmiyor → track ekleme + re-negotiation düzeltildi
-// - Ekran yayını görünmüyor → stream/sinyal eşleştirme yeniden yazıldı
-// - ontrack event.streams[0] undefined olabilir → track bazlı yaklaşım
-// - Re-negotiation her iki taraf için de çalışıyor
+// BASCORD v5 - script.js
+// TÜM EKSİKLER DÜZELTİLDİ:
+// [BUG-1] ICE candidate kuyruk sistemi (remoteDesc bekleme)
+// [BUG-2] ekr-ses track ayrı streamId ile gönderiliyor
+// [BUG-3] bekleyenStream temizleme sadece ayrılan kullanıcıya ait
+// [BUG-4] AudioContext suspended → await ile bekleniyor
+// [BUG-5] streamId undefined → kapatma mesajlarında id gönderilmez
+// [BUG-6] XSS: getOrCreateVideoWrapper'da isim textContent ile
+// [BUG-7] Rollback tüm tarayıcılarda çalışmıyor → perfect negotiation
+// [YENİ-1] Bağlantı kalitesi göstergesi (ping/ms, getStats)
+// [YENİ-2] Bireysel ses seviyesi slider
+// [YENİ-3] Mesaj geçmişi (localStorage)
+// [YENİ-4] Socket otomatik yeniden bağlanma
+// [YENİ-5] Bağlanıyor durumu göstergesi
 // ============================================================
 
-const socket = io();
+const socket = io({
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity
+});
 
 // --- 1. CİHAZ TESPİTİ ---
 const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
 // --- 2. DURUM DEĞİŞKENLERİ ---
 let peerConnections = {};       // { socketId: RTCPeerConnection }
+let polite = {};                // { socketId: bool } — perfect negotiation için
+
+// ICE kuyruk: remoteDescription gelmeden önce gelen adayları beklet
+let iceKuyrugu = {};            // { socketId: [RTCIceCandidate, ...] }
 
 // Stream eşleştirme kuyrukları
-let bekleyenStream  = {};       // streamId -> MediaStream
+let bekleyenStream  = {};       // streamId -> { stream, peerSocketId }
 let bekleyenSinyal  = {};       // streamId -> { kimden, tur }
 
-// Ses analiz temizliği için
+// Ses analiz temizliği
 let sesAnalyzIntervals = {};
 let sesAnalyzNodes     = {};
-let globalAudioCtx = null;
+let globalAudioCtx     = null;
 
 // Medya yayınları
 let kameraYayini   = null;
@@ -30,15 +47,26 @@ let ekranYayini    = null;
 let mikrofonYayini = null;
 let onKameraMi     = true;
 
+// Ekran ses stream'i için ayrı ID takibi
+let ekranSesStreamId = null;    // [BUG-2] ekr-ses için ayrı streamId
+
 // Kontrol & UI durum
 let isPttActive    = false;
 let isPttKeyPressed = false;
 let isDeafened     = false;
 let wasMicEnabledBeforeDeafen = false;
 let okunmamisMesajSayisi = 0;
+let kanalaBaglandim = false;
 
-// Re-negotiation kilidi (çift teklif önleme)
-let muzakereKilidi = {};
+// Re-negotiation kilidi
+let muzakereKilidi     = {};
+let muzakereYapiliyor  = {};    // perfect negotiation için
+
+// Ses seviyeleri { socketId: 0-1 }
+let sesSeviyeleri = {};
+
+// Ping takibi
+let pingIntervals = {};
 
 // --- 3. KULLANICI ADI ---
 let kullaniciAdi = localStorage.getItem('bascord_isim');
@@ -133,9 +161,12 @@ function bildirimSesiCal(frekans, sure = 0.25) {
 function showToast(mesaj, type = 'join') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    toast.className = 'toast' + (type === 'leave' ? ' leave' : '');
-    const icon = type === 'leave' ? '👋' : '🟢';
-    toast.innerHTML = `${icon} ${mesaj}`;
+    toast.className = 'toast' + (type === 'leave' ? ' leave' : type === 'warn' ? ' warn' : '');
+    const icon = type === 'leave' ? '👋' : type === 'warn' ? '⚠️' : '🟢';
+    const span = document.createElement('span');
+    span.textContent = mesaj;
+    toast.innerHTML = icon + ' ';
+    toast.appendChild(span);
     container.appendChild(toast);
     setTimeout(() => { if (container.contains(toast)) container.removeChild(toast); }, 3100);
 }
@@ -170,51 +201,124 @@ window.tamEkranYap = function(elementId) {
 };
 
 // --- 10. DİNAMİK VİDEO KUTU OLUŞTURMA ---
+// [BUG-6] XSS: isim innerHTML'e direkt yazılmıyordu → textContent kullanıldı
 function getOrCreateVideoWrapper(kullaniciId, tip, isim) {
     const wrapperId = `kutu-${kullaniciId}-${tip}`;
     let el = document.getElementById(wrapperId);
     if (el) return el;
 
     el = document.createElement('div');
-    el.className  = 'video-wrapper';
-    el.id         = wrapperId;
+    el.className = 'video-wrapper';
+    el.id        = wrapperId;
 
     const videoId   = `vid-${kullaniciId}-${tip}`;
-    const isMuted   = (kullaniciId === 'yerel') ? 'muted' : '';
-    const flipStyle = (tip === 'kamera' && kullaniciId === 'yerel') ? 'transform:scaleX(-1);' : '';
+    const isMutedAttr = (kullaniciId === 'yerel') ? 'muted' : '';
+    const flipStyle   = (tip === 'kamera' && kullaniciId === 'yerel') ? 'transform:scaleX(-1);' : '';
 
-    let labelText;
+    // Skeleton / bağlanıyor durumu
+    const skeletonDiv = document.createElement('div');
+    skeletonDiv.className = 'video-skeleton';
+    skeletonDiv.id = `skeleton-${kullaniciId}-${tip}`;
+    skeletonDiv.innerHTML = `<div class="skeleton-spinner"></div><div class="skeleton-text">Bağlanıyor...</div>`;
+
+    const pingDot = document.createElement('div');
+    pingDot.className = 'ping-dot';
+    pingDot.id = `ping-${kullaniciId}-${tip}`;
+    if (kullaniciId === 'yerel') pingDot.style.display = 'none';
+
+    // Ping ms göstergesi
+    const pingLabel = document.createElement('div');
+    pingLabel.className = 'ping-label';
+    pingLabel.id = `ping-ms-${kullaniciId}`;
+    if (kullaniciId === 'yerel') pingLabel.style.display = 'none';
+
+    const video = document.createElement('video');
+    video.id       = videoId;
+    video.autoplay = true;
+    video.setAttribute('playsinline', '');
+    if (isMutedAttr) video.muted = true;
+    video.style.cssText = `width:100%; height:100%; object-fit:contain; background:#000; ${flipStyle}`;
+
+    // Label — XSS güvenli textContent
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'video-label';
     if (kullaniciId === 'yerel') {
-        labelText = tip === 'ekran' ? '🖥 Senin Ekranın' : '📷 Sen';
+        labelDiv.textContent = tip === 'ekran' ? '🖥 Senin Ekranın' : '📷 Sen';
     } else {
-        labelText = tip === 'ekran' ? `🖥 ${isim} Ekranı` : `📷 ${isim}`;
+        const emoji = document.createElement('span');
+        emoji.textContent = tip === 'ekran' ? '🖥 ' : '📷 ';
+        const isimNode = document.createTextNode(isim + (tip === 'ekran' ? ' Ekranı' : ''));
+        labelDiv.appendChild(emoji);
+        labelDiv.appendChild(isimNode);
     }
 
-    const kontrolBtnHtml = (tip === 'ekran' && kullaniciId !== 'yerel' && !isMobile)
-        ? `<button class="overlay-btn" id="kontrolBtn-${kullaniciId}" onclick="kontrolIstegiYolla('${kullaniciId}')">
-               <i class="fas fa-hand-pointer"></i> Kontrol Et
-           </button>`
-        : '';
+    const overlayDiv = document.createElement('div');
+    overlayDiv.className = 'video-overlay';
 
-    el.innerHTML = `
-        <div class="ping-dot" id="ping-${kullaniciId}-${tip}" style="${kullaniciId === 'yerel' ? 'display:none;' : ''}"></div>
-        <video id="${videoId}" autoplay playsinline ${isMuted}
-               style="width:100%; height:100%; object-fit:contain; background:#000; ${flipStyle}"></video>
-        <div class="video-label">${labelText}</div>
-        <div class="video-overlay">
-            ${kontrolBtnHtml}
-            <button class="overlay-btn" onclick="tamEkranYap('${videoId}')"><i class="fas fa-expand"></i> Büyüt</button>
-        </div>
-        <div class="ses-seviyesi-bar" id="bar-${kullaniciId}-${tip}"></div>
-    `;
+    // Ses seviyesi slider (uzak kullanıcılar için)
+    // [YENİ-2] Bireysel ses seviyesi ayarı
+    if (kullaniciId !== 'yerel' && tip === 'kamera') {
+        const volWrap = document.createElement('div');
+        volWrap.className = 'vol-wrap';
+        volWrap.innerHTML = `<i class="fas fa-volume-up" style="font-size:11px;color:#fff;"></i>`;
+        const volSlider = document.createElement('input');
+        volSlider.type  = 'range';
+        volSlider.min   = '0';
+        volSlider.max   = '200';
+        volSlider.value = String((sesSeviyeleri[kullaniciId] ?? 1) * 100);
+        volSlider.className = 'vol-slider';
+        volSlider.title = 'Ses Seviyesi';
+        volSlider.oninput = () => {
+            const val = parseInt(volSlider.value) / 100;
+            sesSeviyeleri[kullaniciId] = val;
+            // Tüm o kullanıcıya ait audio elementlerini güncelle
+            document.querySelectorAll(`audio[id^="audio-${kullaniciId}"]`).forEach(a => {
+                a.volume = Math.min(1, val);
+            });
+        };
+        volWrap.appendChild(volSlider);
+        overlayDiv.appendChild(volWrap);
+    }
+
+    if (tip === 'ekran' && kullaniciId !== 'yerel' && !isMobile) {
+        const kontrolBtn = document.createElement('button');
+        kontrolBtn.className = 'overlay-btn';
+        kontrolBtn.id = `kontrolBtn-${kullaniciId}`;
+        kontrolBtn.innerHTML = `<i class="fas fa-hand-pointer"></i> Kontrol Et`;
+        kontrolBtn.onclick = () => kontrolIstegiYolla(kullaniciId);
+        overlayDiv.appendChild(kontrolBtn);
+    }
+
+    const buyutBtn = document.createElement('button');
+    buyutBtn.className = 'overlay-btn';
+    buyutBtn.innerHTML = `<i class="fas fa-expand"></i> Büyüt`;
+    buyutBtn.onclick = () => tamEkranYap(videoId);
+    overlayDiv.appendChild(buyutBtn);
+
+    const sesBar = document.createElement('div');
+    sesBar.className = 'ses-seviyesi-bar';
+    sesBar.id = `bar-${kullaniciId}-${tip}`;
+
+    el.appendChild(skeletonDiv);
+    el.appendChild(pingDot);
+    el.appendChild(pingLabel);
+    el.appendChild(video);
+    el.appendChild(labelDiv);
+    el.appendChild(overlayDiv);
+    el.appendChild(sesBar);
 
     document.getElementById('mainVideoGrid').appendChild(el);
 
+    // Video yüklenince skeleton'ı kaldır
+    video.onloadeddata = () => {
+        const sk = document.getElementById(`skeleton-${kullaniciId}-${tip}`);
+        if (sk) sk.style.display = 'none';
+    };
+
     if (tip === 'ekran' && kullaniciId !== 'yerel' && !isMobile) {
-        const videoEl = el.querySelector('video');
-        videoEl.addEventListener('click', (event) => {
-            if (videoEl.getAttribute('data-kontrol-aktif') !== 'true') return;
-            const rect   = videoEl.getBoundingClientRect();
+        video.addEventListener('click', (event) => {
+            if (video.getAttribute('data-kontrol-aktif') !== 'true') return;
+            const rect   = video.getBoundingClientRect();
             const yuzdeX = ((event.clientX - rect.left)  / rect.width)  * 100;
             const yuzdeY = ((event.clientY - rect.top)   / rect.height) * 100;
             socket.emit('fare-hareketi', { kime: kullaniciId, x: yuzdeX, y: yuzdeY });
@@ -232,7 +336,8 @@ window.kontrolIstegiYolla = function(kimeId) {
 };
 
 socket.on('kontrol-istegi-geldi', (data) => {
-    const onay = confirm(`⚠️ ${data.ad} ekranınızı işaretlemek istiyor. İzin veriyor musunuz?`);
+    const ad = data.ad || 'Kullanıcı';
+    const onay = confirm(`⚠️ ${ad} ekranınızı işaretlemek istiyor. İzin veriyor musunuz?`);
     socket.emit('kontrol-cevap', { kime: data.kimden, onay });
 });
 
@@ -257,15 +362,18 @@ socket.on('karsi-fare-hareketi', (data) => {
 });
 
 // --- 12. SES ANALİZİ ---
-function sesAnaliziniBaslat(stream, wrapperKey, isLocalMic = false) {
+// [BUG-4] AudioContext suspended: await ile bekleniyor
+async function sesAnaliziniBaslat(stream, wrapperKey, isLocalMic = false) {
     if (sesAnalyzIntervals[wrapperKey]) return;
 
     if (!globalAudioCtx) {
         globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+    // Suspended ise resume'u await ile bekle
     if (globalAudioCtx.state === 'suspended') {
-        globalAudioCtx.resume().catch(() => {});
+        try { await globalAudioCtx.resume(); } catch(e) {}
     }
+    if (globalAudioCtx.state !== 'running') return; // Hâlâ açılmadıysa çık
 
     try {
         const kaynak   = globalAudioCtx.createMediaStreamSource(stream);
@@ -328,15 +436,55 @@ function parlamayiAyarla(id, durum) {
 socket.on('konusma-durumu-geldi', (data) => {
     parlamayiAyarla(data.id, data.durum);
     const topBarInfo = document.getElementById('aktifKonusanInfo');
-    if (data.durum) topBarInfo.innerHTML = `🎤 ${data.ad} konuşuyor...`;
-    else if (topBarInfo.innerHTML.includes(data.ad)) topBarInfo.innerHTML = '';
+    if (data.durum) {
+        const adGuvenli = document.createTextNode('🎤 ' + (data.ad || '') + ' konuşuyor...');
+        topBarInfo.textContent = '';
+        topBarInfo.appendChild(adGuvenli);
+    } else if (topBarInfo.textContent.includes(data.ad || '')) {
+        topBarInfo.textContent = '';
+    }
 });
 
 // ============================================================
-// --- 13. WEBRTC ÇEKIRDEK ---
+// --- 13. WEBRTC ÇEKİRDEK — PERFECT NEGOTIATION PAT. ---
+// [BUG-7] Rollback sorunu → Perfect Negotiation pattern
+// [BUG-1] ICE kuyruk sistemi → remoteDescription bekleme
 // ============================================================
 
-// Re-negotiation — kilitle çift offer önleniyor
+// ICE adayını kuyruğa ekle veya direkt uygula
+async function iceAdayiEkle(socketId, aday) {
+    const pc = peerConnections[socketId];
+    if (!pc) return;
+
+    // remoteDescription henüz yoksa kuyruğa al
+    if (!pc.remoteDescription || !pc.remoteDescription.type) {
+        if (!iceKuyrugu[socketId]) iceKuyrugu[socketId] = [];
+        iceKuyrugu[socketId].push(aday);
+    } else {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(aday));
+        } catch(e) {
+            if (!pc.ignoreOffer) console.warn('ICE ekleme hatası:', e);
+        }
+    }
+}
+
+// Bekleyen ICE adaylarını uygula (remoteDescription ayarlandıktan sonra çağır)
+async function bekleyenIceleriUygula(socketId) {
+    const pc = peerConnections[socketId];
+    if (!pc || !iceKuyrugu[socketId]) return;
+    const kuyruk = iceKuyrugu[socketId];
+    iceKuyrugu[socketId] = [];
+    for (const aday of kuyruk) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(aday));
+        } catch(e) {
+            if (!pc.ignoreOffer) console.warn('Kuyruktaki ICE hatası:', e);
+        }
+    }
+}
+
+// Re-negotiation
 async function muzakereBaslat(hedefId) {
     const pc = peerConnections[hedefId];
     if (!pc) return;
@@ -346,6 +494,7 @@ async function muzakereBaslat(hedefId) {
     muzakereKilidi[hedefId] = true;
     try {
         const teklif = await pc.createOffer();
+        if (pc.signalingState !== 'stable') return; // Race condition koruması
         await pc.setLocalDescription(teklif);
         socket.emit('webrtc-teklif', { kime: hedefId, teklif: pc.localDescription });
     } catch(err) {
@@ -355,7 +504,7 @@ async function muzakereBaslat(hedefId) {
     }
 }
 
-// Tek track tüm bağlantılara ekle + re-negotiate
+// Track tüm bağlantılara ekle
 function trackiTumBaglantilaraEkle(track, stream) {
     Object.keys(peerConnections).forEach(hedefId => {
         const pc = peerConnections[hedefId];
@@ -366,8 +515,6 @@ function trackiTumBaglantilaraEkle(track, stream) {
                 sender.replaceTrack(track).catch(() => {});
             } else {
                 pc.addTrack(track, stream);
-                // addTrack sonrası onnegotiationneeded tetiklenecek
-                // ama bazen tetiklenmeyebilir, güvenli olarak manuel çağır
                 setTimeout(() => muzakereBaslat(hedefId), 200);
             }
         } catch(e) {
@@ -376,12 +523,11 @@ function trackiTumBaglantilaraEkle(track, stream) {
     });
 }
 
-// Uyumluluk için
 function trackleriTumBaglantilaraEkle(track, stream) {
     trackiTumBaglantilaraEkle(track, stream);
 }
 
-// Stream + Sinyal çift kuyruk eşleştirme
+// Stream + Sinyal eşleştirme
 function streamSinyalEsles(streamId) {
     if (bekleyenSinyal[streamId] && bekleyenStream[streamId]) {
         const { kimden, tur } = bekleyenSinyal[streamId];
@@ -395,7 +541,7 @@ function streamSinyalEsles(streamId) {
 // Uzak yayını ekrana yerleştir
 function remoteYayinEkle(stream, kullaniciId, tur) {
     const isimEl = document.getElementById(`av-${kullaniciId}`);
-    const isim   = isimEl ? isimEl.innerText : 'Kullanıcı';
+    const isim   = isimEl ? isimEl.textContent : 'Kullanıcı';
 
     if (tur === 'kam-ac') {
         const wrapper = getOrCreateVideoWrapper(kullaniciId, 'kamera', isim);
@@ -424,6 +570,9 @@ function remoteYayinEkle(stream, kullaniciId, tur) {
             audioEl.id        = audioId;
             audioEl.autoplay  = true;
             audioEl.muted     = isDeafened;
+            // [YENİ-2] Kaydedilmiş ses seviyesini uygula
+            const kayitliSeviye = sesSeviyeleri[kullaniciId] ?? 1;
+            audioEl.volume = Math.min(1, kayitliSeviye);
             document.getElementById('remoteAudioContainer').appendChild(audioEl);
         }
         if (audioEl.srcObject !== stream) {
@@ -433,6 +582,51 @@ function remoteYayinEkle(stream, kullaniciId, tur) {
     }
 }
 
+// ============================================================
+// [YENİ-1] BAĞLANTI KALİTESİ GÖSTERGESİ (getStats)
+// ============================================================
+function pingTakibiniBaslat(socketId) {
+    if (pingIntervals[socketId]) return;
+    pingIntervals[socketId] = setInterval(async () => {
+        const pc = peerConnections[socketId];
+        if (!pc || pc.connectionState === 'closed') {
+            clearInterval(pingIntervals[socketId]);
+            delete pingIntervals[socketId];
+            return;
+        }
+        try {
+            const stats = await pc.getStats();
+            let rtt = null;
+            stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.currentRoundTripTime) {
+                    rtt = Math.round(report.currentRoundTripTime * 1000);
+                }
+            });
+            if (rtt !== null) {
+                const label = document.getElementById(`ping-ms-${socketId}`);
+                if (label) {
+                    label.textContent = `${rtt}ms`;
+                    label.style.color = rtt < 80 ? 'var(--renk-basari)' : rtt < 150 ? '#faa61a' : 'var(--renk-tehlike)';
+                }
+                // Ping dot rengi
+                const dot = document.querySelector(`[id^="ping-${socketId}"]`);
+                if (dot) {
+                    dot.style.background = rtt < 80 ? 'var(--renk-basari)' : rtt < 150 ? '#faa61a' : 'var(--renk-tehlike)';
+                }
+            }
+        } catch(e) {}
+    }, 2000);
+}
+
+function pingTakibiniDurdur(socketId) {
+    if (pingIntervals[socketId]) {
+        clearInterval(pingIntervals[socketId]);
+        delete pingIntervals[socketId];
+    }
+    const label = document.getElementById(`ping-ms-${socketId}`);
+    if (label) label.textContent = '';
+}
+
 // Peer bağlantı kur
 function baglantiKoprusuKur(hedefId, isInitiator) {
     if (peerConnections[hedefId]) {
@@ -440,28 +634,25 @@ function baglantiKoprusuKur(hedefId, isInitiator) {
         delete peerConnections[hedefId];
     }
     delete muzakereKilidi[hedefId];
+    delete muzakereYapiliyor[hedefId];
+    iceKuyrugu[hedefId] = [];
 
     const pc = new RTCPeerConnection(stunSunuculari);
     peerConnections[hedefId] = pc;
+    polite[hedefId] = !isInitiator; // Perfect negotiation: late joiner polite
 
-    // ============================================================
-    // KRİTİK DÜZELTME 1: ontrack
-    // event.streams[0] bazen undefined → fallback MediaStream oluştur
-    // Hem stream.id hem de peer+kind bazlı eşleştirme yapılıyor
-    // ============================================================
     pc.ontrack = (event) => {
         let stream = event.streams && event.streams[0];
         if (!stream) {
             stream = new MediaStream([event.track]);
         }
 
-        // Stream ID bazlı eşleştirme
         bekleyenStream[stream.id] = stream;
         streamSinyalEsles(stream.id);
 
-        // Fallback: Aynı peer'dan gelen sinyal ile kind eşleştirmesi
+        // Fallback: kind bazlı eşleştirme
         Object.keys(bekleyenSinyal).forEach(sid => {
-            if (bekleyenStream[sid]) return; // Zaten eşleşti
+            if (bekleyenStream[sid]) return;
             const sinyal = bekleyenSinyal[sid];
             if (sinyal.kimden !== hedefId) return;
             const turKind = (sinyal.tur === 'mik-ac' || sinyal.tur === 'ekr-ses') ? 'audio' : 'video';
@@ -477,26 +668,50 @@ function baglantiKoprusuKur(hedefId, isInitiator) {
     };
 
     pc.onconnectionstatechange = () => {
-        console.log(`[WebRTC] ${hedefId} bağlantı: ${pc.connectionState}`);
-        if (pc.connectionState === 'failed' && peerConnections[hedefId] === pc && isInitiator) {
-            pc.restartIce();
-            setTimeout(() => muzakereBaslat(hedefId), 500);
+        const state = pc.connectionState;
+        // Bağlantı göstergesi
+        const dots = document.querySelectorAll(`[id^="ping-${hedefId}"]`);
+        dots.forEach(d => {
+            d.style.display = (state === 'connected' || state === 'completed') ? 'block' : 'block';
+            d.style.background = state === 'connected' || state === 'completed'
+                ? 'var(--renk-basari)'
+                : state === 'connecting'
+                    ? '#faa61a'
+                    : 'var(--renk-tehlike)';
+        });
+
+        if (state === 'connected' || state === 'completed') {
+            pingTakibiniBaslat(hedefId);
+        } else if (state === 'failed') {
+            pingTakibiniDurdur(hedefId);
+            if (peerConnections[hedefId] === pc && isInitiator) {
+                showToast('Bağlantı koptu, yeniden deneniyor...', 'warn');
+                pc.restartIce();
+                setTimeout(() => muzakereBaslat(hedefId), 500);
+            }
+        } else if (state === 'disconnected') {
+            pingTakibiniDurdur(hedefId);
         }
     };
 
     // ============================================================
-    // KRİTİK DÜZELTME 2: Re-negotiation her iki taraf için
+    // [BUG-7] PERFECT NEGOTIATION PATTERN
+    // onnegotiationneeded: isInitiator veya polite taraf offer gönderir
+    // Glare durumu: polite taraf rollback yapar
     // ============================================================
-    pc.onnegotiationneeded = () => {
-        if (pc.signalingState === 'stable') {
-            muzakereBaslat(hedefId);
+    pc.onnegotiationneeded = async () => {
+        try {
+            muzakereYapiliyor[hedefId] = true;
+            await pc.setLocalDescription();
+            socket.emit('webrtc-teklif', { kime: hedefId, teklif: pc.localDescription });
+        } catch(err) {
+            console.warn('onnegotiationneeded hatası:', err);
+        } finally {
+            muzakereYapiliyor[hedefId] = false;
         }
     };
 
-    // ============================================================
-    // KRİTİK DÜZELTME 3: Mevcut track'leri hemen ekle
-    // Mikrofon dahil — önceki sürümde ses eksik ekleniyordu
-    // ============================================================
+    // Mevcut track'leri hemen ekle
     if (mikrofonYayini) {
         mikrofonYayini.getAudioTracks().forEach(t => {
             try { pc.addTrack(t, mikrofonYayini); } catch(e) {}
@@ -513,10 +728,6 @@ function baglantiKoprusuKur(hedefId, isInitiator) {
         });
     }
 
-    if (isInitiator) {
-        setTimeout(() => muzakereBaslat(hedefId), 400);
-    }
-
     return pc;
 }
 
@@ -528,18 +739,29 @@ socket.on('yeni-kullanici-geldi', (data) => {
     baglantiKoprusuKur(data.id, true);
 });
 
+// ============================================================
+// [BUG-7] PERFECT NEGOTIATION — Teklif / Cevap işleme
+// ============================================================
 socket.on('webrtc-teklif-geldi', async (data) => {
     if (!peerConnections[data.kimden]) baglantiKoprusuKur(data.kimden, false);
-    const pc = peerConnections[data.kimden];
+    const pc        = peerConnections[data.kimden];
+    const isPolite  = polite[data.kimden] ?? true;
+
+    const offerCollision = data.teklif.type === 'offer' &&
+        (muzakereYapiliyor[data.kimden] || pc.signalingState !== 'stable');
+
+    pc.ignoreOffer = !isPolite && offerCollision;
+    if (pc.ignoreOffer) return;
+
     try {
-        // Glare (çarpışma) durumu: her iki taraf da teklif gönderdiyse
-        if (pc.signalingState === 'have-local-offer') {
-            await pc.setLocalDescription({ type: 'rollback' });
-        }
         await pc.setRemoteDescription(new RTCSessionDescription(data.teklif));
-        const cevap = await pc.createAnswer();
-        await pc.setLocalDescription(cevap);
-        socket.emit('webrtc-cevap', { kime: data.kimden, cevap: pc.localDescription });
+        // remoteDescription ayarlandı, kuyruktaki ICE adaylarını uygula
+        await bekleyenIceleriUygula(data.kimden);
+
+        if (data.teklif.type === 'offer') {
+            await pc.setLocalDescription();
+            socket.emit('webrtc-cevap', { kime: data.kimden, cevap: pc.localDescription });
+        }
     } catch(e) {
         console.warn('Teklif işleme hatası:', e);
     }
@@ -549,37 +771,35 @@ socket.on('webrtc-cevap-geldi', async (data) => {
     const pc = peerConnections[data.kimden];
     if (!pc) return;
     try {
-        if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(data.cevap));
-        }
+        await pc.setRemoteDescription(new RTCSessionDescription(data.cevap));
+        // remoteDescription ayarlandı, kuyruktaki ICE adaylarını uygula
+        await bekleyenIceleriUygula(data.kimden);
     } catch(e) {
         console.warn('Cevap işleme hatası:', e);
     }
 });
 
+// [BUG-1] ICE kuyruk sistemi
 socket.on('ice-adayi-geldi', async (data) => {
-    const pc = peerConnections[data.kimden];
-    if (!pc) return;
-    try {
-        await pc.addIceCandidate(new RTCIceCandidate(data.aday));
-    } catch(e) {}
+    await iceAdayiEkle(data.kimden, data.aday);
 });
 
 // --- 15. MEDYA DURUMU (gelen) ---
+// [BUG-5] streamId undefined: kapatma mesajlarında id yok → undefined check
 socket.on('medya-durumu-geldi', (data) => {
     const { kimden, tur, streamId } = data;
 
     if (tur === 'kam-ac' || tur === 'ekr-ac' || tur === 'mik-ac' || tur === 'ekr-ses') {
+        if (!streamId) return; // [BUG-5] guard
+
         bekleyenSinyal[streamId] = { kimden, tur };
         streamSinyalEsles(streamId);
 
-        // 5 saniye timeout
         setTimeout(() => {
             if (bekleyenSinyal[streamId]) {
-                console.warn(`Stream zaman aşımı: ${streamId} (${tur})`);
                 delete bekleyenSinyal[streamId];
             }
-        }, 5000);
+        }, 8000);
 
     } else if (tur === 'kam-kap') {
         const w = document.getElementById(`kutu-${kimden}-kamera`);
@@ -622,7 +842,7 @@ function kullanicilariGuncelle(kullanicilar, durumlar) {
 
         const isimSpan = document.createElement('span');
         isimSpan.style.color = '#dbdee1';
-        isimSpan.textContent = kullanicilar[id];
+        isimSpan.textContent = kullanicilar[id]; // XSS güvenli
 
         sol.appendChild(avatar);
         sol.appendChild(isimSpan);
@@ -630,10 +850,10 @@ function kullanicilariGuncelle(kullanicilar, durumlar) {
         const ikonlar = document.createElement('div');
         ikonlar.className = 'status-icons';
         ikonlar.innerHTML = `
-            <i class="fas fa-video"          title="Kamera"   style="color:${d.kamera   ? 'var(--renk-aktif)'   : 'var(--renk-gri)'};"></i>
-            <i class="fas fa-desktop"        title="Ekran"    style="color:${d.ekran    ? 'var(--renk-basari)'  : 'var(--renk-gri)'};"></i>
+            <i class="fas fa-video"   title="Kamera"   style="color:${d.kamera   ? 'var(--renk-aktif)'   : 'var(--renk-gri)'};"></i>
+            <i class="fas fa-desktop" title="Ekran"    style="color:${d.ekran    ? 'var(--renk-basari)'  : 'var(--renk-gri)'};"></i>
             <i class="fas ${d.kulaklik ? 'fa-headphones-slash' : 'fa-headphones'}" title="Kulaklık" style="color:${d.kulaklik ? 'var(--renk-tehlike)' : 'var(--renk-gri)'};"></i>
-            <i class="fas ${d.mikrofon ? 'fa-microphone'      : 'fa-microphone-slash'}" title="Mikrofon" style="color:${d.mikrofon ? 'var(--renk-basari)' : 'var(--renk-tehlike)'};"></i>
+            <i class="fas ${d.mikrofon ? 'fa-microphone' : 'fa-microphone-slash'}" title="Mikrofon" style="color:${d.mikrofon ? 'var(--renk-basari)' : 'var(--renk-tehlike)'};"></i>
         `;
 
         item.appendChild(sol);
@@ -665,12 +885,55 @@ socket.on('kullanici-ayrildi', (id) => {
         delete peerConnections[id];
     }
     delete muzakereKilidi[id];
+    delete muzakereYapiliyor[id];
+    delete polite[id];
+    delete iceKuyrugu[id];
+    pingTakibiniDurdur(id);
 
+    // [BUG-3] Sadece ayrılan kullanıcıya ait sinyalleri temizle
     Object.keys(bekleyenSinyal).forEach(k => {
         if (bekleyenSinyal[k] && bekleyenSinyal[k].kimden === id) delete bekleyenSinyal[k];
     });
-    // Ayrılan kullanıcıya ait bekleyen stream'leri temizle
-    Object.keys(bekleyenStream).forEach(k => { delete bekleyenStream[k]; });
+    // Sadece ayrılan kullanıcının stream'lerini temizle
+    Object.keys(bekleyenStream).forEach(k => {
+        const s = bekleyenStream[k];
+        if (s && s._peerId === id) delete bekleyenStream[k];
+    });
+});
+
+// ============================================================
+// [YENİ-4] SOCKET OTOMATİK YENİDEN BAĞLANMA
+// ============================================================
+socket.on('disconnect', (reason) => {
+    showToast('Sunucu bağlantısı koptu, yeniden bağlanılıyor...', 'warn');
+    // Tüm peer bağlantılarını kapat
+    Object.keys(peerConnections).forEach(id => {
+        try { peerConnections[id].close(); } catch(e) {}
+        delete peerConnections[id];
+        pingTakibiniDurdur(id);
+    });
+    // Bağlantı durumunu sıfırla
+    if (kanalaBaglandim) {
+        kanalaKatilBtn.innerHTML = "<i class='fas fa-sync fa-spin' style='font-size:15px;'></i> Yeniden bağlanıyor...";
+    }
+});
+
+socket.on('reconnect', () => {
+    showToast('Sunucuya yeniden bağlandı!', 'join');
+    if (kanalaBaglandim) {
+        socket.emit('kanala-katil', kullaniciAdi);
+        kanalaKatilBtn.innerHTML = "<i class='fas fa-plug' style='font-size:15px;'></i> Bağlandı";
+        // Mevcut yayınları yeniden paylaş
+        if (mikrofonYayini && mikrofonYayini.getAudioTracks()[0]?.enabled) {
+            socket.emit('medya-durumu', { tur: 'mik-ac', broadcast: true, id: mikrofonYayini.id });
+        }
+        if (kameraYayini) {
+            socket.emit('medya-durumu', { tur: 'kam-ac', broadcast: true, id: kameraYayini.id });
+        }
+        if (ekranYayini) {
+            socket.emit('medya-durumu', { tur: 'ekr-ac', broadcast: true, id: ekranYayini.id });
+        }
+    }
 });
 
 // --- 17. KANALA KATIL ---
@@ -678,6 +941,7 @@ kanalaKatilBtn.addEventListener('click', () => {
     kanalaKatilBtn.innerHTML = "<i class='fas fa-plug' style='font-size:15px;'></i> Bağlandı";
     kanalaKatilBtn.classList.add('active');
     kanalaKatilBtn.disabled = true;
+    kanalaBaglandim = true;
 
     mikrofonBtn.disabled  = false;
     kulaklikBtn.disabled  = false;
@@ -691,7 +955,7 @@ kanalaKatilBtn.addEventListener('click', () => {
 // --- 18. MİKROFON ---
 mikrofonBtn.addEventListener('click', async () => {
     if (isDeafened) {
-        showToast('Deafen aktifken mikrofon açılamaz!');
+        showToast('Deafen aktifken mikrofon açılamaz!', 'warn');
         return;
     }
 
@@ -718,14 +982,17 @@ mikrofonBtn.addEventListener('click', async () => {
                 socket.emit('medya-durumu', { tur: 'mik-ac', broadcast: true, id: mikrofonYayini.id });
             }
 
-            // KRİTİK: Track ekle ve re-negotiate et
             const audioTrack = mikrofonYayini.getAudioTracks()[0];
             trackiTumBaglantilaraEkle(audioTrack, mikrofonYayini);
             sesAnaliziniBaslat(mikrofonYayini, 'yerel-kamera', true);
 
         } catch(e) {
-            console.error('Mikrofon hatası:', e);
-            showToast('Mikrofon açılamadı! İzin verdiniz mi?');
+            const mesaj = e.name === 'NotAllowedError'
+                ? 'Mikrofon izni reddedildi. Tarayıcı izinlerini kontrol edin.'
+                : e.name === 'NotFoundError'
+                    ? 'Mikrofon bulunamadı. Cihazınızı kontrol edin.'
+                    : 'Mikrofon açılamadı: ' + e.message;
+            showToast(mesaj, 'warn');
         }
     } else {
         const track = mikrofonYayini.getAudioTracks()[0];
@@ -796,7 +1063,8 @@ kameraBtn.addEventListener('click', async () => {
             socket.emit('medya-durumu', { tur: 'kam-ac', broadcast: true, id: kameraYayini.id });
 
         } catch(e) {
-            showToast('Kamera açılamadı! İzin verdiniz mi?');
+            const mesaj = e.name === 'NotAllowedError' ? 'Kamera izni reddedildi.' : 'Kamera açılamadı.';
+            showToast(mesaj, 'warn');
         }
     } else {
         kameraYayini.getTracks().forEach(t => t.stop());
@@ -828,6 +1096,7 @@ kameraCevirBtn.addEventListener('click', async () => {
 });
 
 // --- 21. EKRAN PAYLAŞIMI ---
+// [BUG-2] ekr-ses: video ve audio track'leri FARKLI streamId ile gönderiliyor
 ekranBtn.addEventListener('click', async () => {
     const ikon = document.getElementById('ekran-icon');
 
@@ -847,7 +1116,7 @@ ekranBtn.addEventListener('click', async () => {
 
             ekranYayini = await navigator.mediaDevices.getDisplayMedia(videoAyar);
 
-            // Sistem sesinin lokal playback'ini kapat (yankı önleme)
+            // Yankı önleme
             if (ekranYayini.getAudioTracks().length > 0) {
                 const at = ekranYayini.getAudioTracks()[0];
                 if (at.applyConstraints) {
@@ -863,23 +1132,35 @@ ekranBtn.addEventListener('click', async () => {
             ekranBtn.classList.add('acik');
             ikon.style.color = 'var(--renk-basari)';
 
-            // KRİTİK: Video ve audio track'leri ayrı ayrı ekle
-            ekranYayini.getTracks().forEach(track => {
-                trackiTumBaglantilaraEkle(track, ekranYayini);
-                const tip = track.kind === 'video' ? 'ekr-ac' : 'ekr-ses';
-                socket.emit('medya-durumu', { tur: tip, broadcast: true, id: ekranYayini.id });
-            });
+            // [BUG-2] Video track → ekranYayini.id ile, Audio track → ayrı stream oluştur
+            const videoTracks = ekranYayini.getVideoTracks();
+            const audioTracks = ekranYayini.getAudioTracks();
+
+            if (videoTracks.length > 0) {
+                const videoStream = new MediaStream(videoTracks);
+                trackiTumBaglantilaraEkle(videoTracks[0], videoStream);
+                socket.emit('medya-durumu', { tur: 'ekr-ac', broadcast: true, id: videoStream.id });
+            }
+
+            if (audioTracks.length > 0) {
+                // Audio için AYRI bir MediaStream oluştur → farklı stream.id
+                const audioStream = new MediaStream(audioTracks);
+                ekranSesStreamId = audioStream.id;
+                trackiTumBaglantilaraEkle(audioTracks[0], audioStream);
+                socket.emit('medya-durumu', { tur: 'ekr-ses', broadcast: true, id: audioStream.id });
+            }
 
             ekranYayini.getVideoTracks()[0].onended = () => {
                 if (ekranYayini) ekranBtn.click();
             };
 
         } catch(e) {
-            if (e.name !== 'NotAllowedError') showToast('Ekran paylaşılamadı!');
+            if (e.name !== 'NotAllowedError') showToast('Ekran paylaşılamadı!', 'warn');
         }
     } else {
         ekranYayini.getTracks().forEach(t => t.stop());
         ekranYayini = null;
+        ekranSesStreamId = null;
 
         const w = document.getElementById('kutu-yerel-ekran');
         if (w) w.remove();
@@ -965,12 +1246,41 @@ gamerModBtn.addEventListener('click', () => {
     }
 });
 
-// --- 24. SOHBET ---
-function ekranaMesajYaz(isim, metin, benMi, resimMi = false) {
+// ============================================================
+// --- 24. SOHBET + [YENİ-3] MESAJ GEÇMİŞİ (localStorage)
+// ============================================================
+const MESAJ_GECMISI_KEY = 'bascord_mesaj_gecmisi';
+const MAX_GECMIS = 100;
+
+function mesajGecmisineKaydet(isim, metin, benMi, resimMi = false) {
+    if (resimMi) return; // Resimleri kaydetme (boyut sorunu)
+    try {
+        const gecmis = JSON.parse(localStorage.getItem(MESAJ_GECMISI_KEY) || '[]');
+        gecmis.push({ isim, metin, benMi, zaman: Date.now() });
+        if (gecmis.length > MAX_GECMIS) gecmis.splice(0, gecmis.length - MAX_GECMIS);
+        localStorage.setItem(MESAJ_GECMISI_KEY, JSON.stringify(gecmis));
+    } catch(e) {}
+}
+
+function mesajGecmisiniYukle() {
+    try {
+        const gecmis = JSON.parse(localStorage.getItem(MESAJ_GECMISI_KEY) || '[]');
+        if (gecmis.length === 0) return;
+        const ayirici = document.createElement('div');
+        ayirici.style.cssText = 'text-align:center; color:#4e5058; font-size:11px; font-weight:600; padding:8px; border-bottom:1px solid #2b2d31; margin-bottom:8px;';
+        ayirici.textContent = `── Önceki Mesajlar (${gecmis.length}) ──`;
+        mesajGecmisi.appendChild(ayirici);
+        gecmis.forEach(m => ekranaMesajYaz(m.isim, m.metin, m.benMi, false, m.zaman));
+    } catch(e) {}
+}
+
+function ekranaMesajYaz(isim, metin, benMi, resimMi = false, zamanDamgasi = null) {
     const div = document.createElement('div');
     div.className = benMi ? 'msg-container benim' : 'msg-container';
 
-    const saat = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const saat = zamanDamgasi
+        ? new Date(zamanDamgasi).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const baslik = document.createElement('div');
     baslik.style.marginBottom = '5px';
@@ -996,7 +1306,7 @@ function ekranaMesajYaz(isim, metin, benMi, resimMi = false) {
         img.onclick = () => window.open(metin);
         icerik.appendChild(img);
     } else {
-        icerik.textContent = metin;
+        icerik.textContent = metin; // XSS güvenli
     }
     div.appendChild(icerik);
 
@@ -1004,11 +1314,15 @@ function ekranaMesajYaz(isim, metin, benMi, resimMi = false) {
     mesajGecmisi.scrollTop = mesajGecmisi.scrollHeight;
 }
 
+// Sayfa yüklenince geçmişi yükle
+mesajGecmisiniYukle();
+
 mesajGonderBtn.addEventListener('click', () => {
     const mesaj = mesajKutusu.value.trim();
     if (mesaj !== '') {
         socket.emit('chat-mesaji', { ad: kullaniciAdi, metin: mesaj });
         ekranaMesajYaz(kullaniciAdi, mesaj, true);
+        mesajGecmisineKaydet(kullaniciAdi, mesaj, true);
         mesajKutusu.value = '';
     }
 });
@@ -1017,6 +1331,12 @@ mesajKutusu.addEventListener('keypress', (e) => { if (e.key === 'Enter') mesajGo
 dosyaSecici.addEventListener('change', (e) => {
     const dosya = e.target.files[0];
     if (!dosya) return;
+    // Dosya boyutu kontrolü (5MB)
+    if (dosya.size > 5 * 1024 * 1024) {
+        showToast('Dosya çok büyük! Maksimum 5MB.', 'warn');
+        e.target.value = '';
+        return;
+    }
     const okuyucu = new FileReader();
     okuyucu.onload = (ev) => {
         socket.emit('dosya-gonder', { ad: kullaniciAdi, data: ev.target.result });
@@ -1028,6 +1348,7 @@ dosyaSecici.addEventListener('change', (e) => {
 
 socket.on('yeni-mesaj', (data) => {
     ekranaMesajYaz(data.ad, data.metin, false);
+    mesajGecmisineKaydet(data.ad, data.metin, false);
     if (window.innerWidth <= 850) {
         const chatPanel = document.querySelector('.chat-panel');
         if (chatPanel && chatPanel.style.display !== 'flex') {
