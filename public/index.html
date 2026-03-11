@@ -377,6 +377,23 @@
             width: 14px; height: 14px; border-radius: 50%;
             background: var(--renk-aktif); cursor: pointer; border: none;
         }
+
+        /* TOAST WARN */
+        .toast.warn { border-left-color: #faa61a; }
+        .video-skeleton { position:absolute;inset:0;z-index:4;background:#1a1b1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px; }
+        .skeleton-spinner { width:32px;height:32px;border:3px solid #4e5058;border-top-color:var(--renk-aktif);border-radius:50%;animation:spin 0.8s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg);} }
+        .skeleton-text { color:var(--renk-gri);font-size:13px;font-weight:600; }
+        .ping-label { position:absolute;top:12px;left:28px;z-index:6;display:none;font-size:10px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,0.8); }
+        .vol-wrap { display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.2);padding:6px 10px;border-radius:8px; }
+        .vol-slider { -webkit-appearance:none;appearance:none;width:70px;height:4px;border-radius:2px;background:#4e5058;outline:none;cursor:pointer; }
+        .vol-slider::-webkit-slider-thumb { -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--renk-aktif);cursor:pointer; }
+        #diagPanel { display:none;position:fixed;bottom:0;right:0;width:440px;height:260px;background:rgba(0,0,0,.93);border:1px solid #4e5058;border-radius:12px 0 0 0;z-index:9999999;flex-direction:column;font-family:monospace; }
+        #diagHeader { padding:8px 12px;background:#1a1b1e;border-bottom:1px solid #333;font-size:12px;font-weight:700;color:var(--renk-aktif);display:flex;justify-content:space-between;align-items:center;border-radius:12px 0 0 0; }
+        #diagLogs { flex:1;overflow-y:auto;padding:6px 10px; }
+        #diagClear { background:#4e5058;border:none;color:white;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px; }
+        #odaKoduGostergesi { display:none;background:rgba(88,101,242,.2);border:1px solid var(--renk-aktif);color:var(--renk-aktif);padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:1px; }
+        #odaKoduGostergesi:hover { background:rgba(88,101,242,.4); }
     </style>
 </head>
 <body>
@@ -494,6 +511,10 @@
                 <i class="fas fa-info-circle" style="color:#faa61a; font-size:13px; cursor:pointer;" onclick="document.getElementById('ipucuModal').style.display='flex'" title="İpuçları"></i>
             </span>
             <div id="aktifKonusanInfo" style="color:var(--renk-basari); font-size:13px; font-weight:700; flex:1; text-align:center;"></div>
+            <span id="odaKoduGostergesi" onclick="odaKoduPaylas()" title="Tıkla: Oda linkini kopyala"></span>
+            <button onclick="yeniOdaOlustur()" title="Yeni özel oda oluştur" style="background:#1e1f22; border:1px solid #4e5058; color:var(--renk-gri); padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700; flex-shrink:0;">
+                <i class="fas fa-plus-square"></i> Yeni Oda
+            </button>
             <select id="kaliteSecici" style="background:#1e1f22; color:#fff; border:1px solid #4e5058; padding:7px 12px; border-radius:8px; font-weight:700; cursor:pointer; outline:none; font-size:13px; flex-shrink:0;">
                 <option value="1080">1080p Ultra HD</option>
                 <option value="720">720p HD</option>
@@ -545,6 +566,15 @@
             <i class="fas fa-bars"></i>
             <span>Menü</span>
         </button>
+    </div>
+
+    <!-- DİYAGNOSTİK PANEL (Ctrl+Shift+D) -->
+    <div id="diagPanel">
+        <div id="diagHeader">
+            <span>🔍 Bascord Diyagnostik (Ctrl+Shift+D)</span>
+            <button id="diagClear" onclick="document.getElementById('diagLogs').innerHTML='';diagLogs=[]">Temizle</button>
+        </div>
+        <div id="diagLogs"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
