@@ -6,403 +6,513 @@
     <title>Bascord Premium</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* ── CSS DEĞİŞKENLERİ ── */
         :root {
-            --renk-aktif: #5865F2;
-            --renk-tehlike: #ed4245;
-            --renk-basari: #23a559;
-            --renk-gri: #80848e;
-            --renk-zemin: #313338;
+            --renk-aktif:    #5865F2;
+            --renk-tehlike:  #ed4245;
+            --renk-basari:   #23a559;
+            --renk-gri:      #80848e;
+            --renk-zemin:    #313338;
+            --sidebar-bg:    #2b2d31;
+            --body-bg:       #1e1f22;
+            --renk-uyari:    #faa61a;
+            --renk-nitro:    #ff73fa;
         }
 
-        ::-webkit-scrollbar { width: 6px; }
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: #2b2d31; }
         ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #4e5058; }
 
-        * { box-sizing: border-box; }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            height: 100vh;
-            background-color: #1e1f22;
-            color: #dbdee1;
-            overflow: hidden;
-            padding-top: 32px;
+            display: flex; height: 100vh;
+            background-color: var(--body-bg);
+            color: #dbdee1; overflow: hidden; padding-top: 32px;
         }
 
-        /* TITLE BAR */
+        /* ── CSS UYARISI DÜZELTMESİ: -webkit-appearance yanında appearance da tanımlı ── */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;           /* ← Bu satır VS Code uyarısını giderir */
+            height: 4px; border-radius: 2px;
+            background: #1e1f22; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px; height: 12px;
+            border-radius: 50%; background: var(--renk-aktif); cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 12px; height: 12px;
+            border-radius: 50%; background: var(--renk-aktif);
+            border: none; cursor: pointer;
+        }
+
+        /* ── TITLE BAR ── */
         #bascord-title-bar {
             display: flex; justify-content: space-between; align-items: center;
-            background-color: #1e1f22; height: 32px; width: 100%;
+            background-color: var(--body-bg); height: 32px; width: 100%;
             position: fixed; top: 0; left: 0; z-index: 9999;
             user-select: none; -webkit-app-region: drag;
         }
         .drag-region { display: flex; align-items: center; padding-left: 12px; color: var(--renk-gri); font-size: 12px; font-weight: bold; letter-spacing: 0.5px; }
-        .bar-icon { margin-right: 8px; color: #faa61a; }
+        .bar-icon { margin-right: 8px; color: var(--renk-uyari); }
         .window-controls { display: flex; height: 100%; -webkit-app-region: no-drag; }
         .window-controls button { background: transparent; border: none; color: var(--renk-gri); width: 46px; height: 100%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
         .window-controls button:hover { background-color: var(--renk-zemin); color: #dbdee1; }
         #close-btn:hover { background-color: var(--renk-tehlike) !important; color: white !important; }
 
-        /* SIDEBAR */
+        /* ── LAYOUT ── */
+        /* Sunucu ikon şeridi (Discord'un sol kenar çubuğu) */
+        .server-strip {
+            width: 72px; background-color: #1e1f22;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 12px 0; gap: 8px; border-right: 1px solid #111214;
+            overflow-y: auto; flex-shrink: 0;
+        }
+        .server-strip::-webkit-scrollbar { width: 0; }
+        .server-icon {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: var(--renk-zemin); display: flex; align-items: center;
+            justify-content: center; cursor: pointer; transition: 0.2s;
+            font-size: 18px; color: var(--renk-aktif); position: relative;
+            font-weight: 800; flex-shrink: 0;
+        }
+        .server-icon:hover { border-radius: 30%; background: var(--renk-aktif); color: white; }
+        .server-icon.active { border-radius: 30%; background: var(--renk-aktif); color: white; }
+        .server-icon.active::before {
+            content: ''; position: absolute; left: -12px; top: 50%;
+            transform: translateY(-50%); width: 4px; height: 70%;
+            background: white; border-radius: 0 2px 2px 0;
+        }
+        .server-divider { width: 32px; height: 2px; background: #35373c; border-radius: 1px; margin: 4px 0; }
+        .server-add-btn {
+            width: 48px; height: 48px; border-radius: 50%; border: 2px dashed #35373c;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--renk-basari); font-size: 20px;
+            transition: 0.2s; background: none;
+        }
+        .server-add-btn:hover { border-radius: 30%; background: rgba(35,165,89,0.1); }
+
+        /* ── SIDEBAR ── */
         .sidebar {
-            width: 280px; background-color: #2b2d31; display: flex; flex-direction: column;
-            flex-shrink: 0; box-shadow: 2px 0 15px rgba(0,0,0,0.3); z-index: 10;
+            width: 240px; background-color: var(--sidebar-bg);
+            display: flex; flex-direction: column; flex-shrink: 0;
             border-right: 1px solid #1f2123;
         }
         .server-header {
-            padding: 22px; font-weight: 800; border-bottom: 1px solid #1f2123;
-            font-size: 17px; color: #fff; display: flex; align-items: center;
-            justify-content: space-between; background: linear-gradient(180deg, #2b2d31 0%, #232428 100%);
+            padding: 16px; font-weight: 800; border-bottom: 1px solid #1f2123;
+            font-size: 15px; color: #fff; display: flex; align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(180deg, #2b2d31 0%, #232428 100%);
+            cursor: pointer; transition: 0.15s;
         }
-        .channels { padding: 15px 12px; }
-        .channel {
-            padding: 12px 15px; border-radius: 8px; color: #949ba4; cursor: pointer;
-            margin-bottom: 8px; display: flex; align-items: center; gap: 12px; font-weight: 600;
-            border: none; background: #202225; width: 100%; text-align: left;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .channel:hover { background-color: #35373c; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-        .channel.active { background-color: var(--renk-aktif); color: #ffffff; box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4); }
+        .server-header:hover { background: #35373c; }
 
-        /* USER LIST */
+        /* Kanal kategorisi */
+        .kanal-kategori {
+            padding: 16px 8px 4px 8px; font-size: 11px; font-weight: 800;
+            color: var(--renk-gri); text-transform: uppercase; letter-spacing: 0.5px;
+            display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+        }
+        .kanal-kategori:hover { color: #dbdee1; }
+        .kanal-listesi { padding: 0 8px; }
+        .channel {
+            padding: 6px 8px; border-radius: 4px; color: var(--renk-gri);
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            font-weight: 600; font-size: 15px; border: none; background: none;
+            width: 100%; text-align: left; transition: 0.15s; position: relative;
+        }
+        .channel:hover { background: rgba(255,255,255,0.06); color: #dbdee1; }
+        .channel.active { background: rgba(255,255,255,0.1); color: #fff; }
+        .channel .unread-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #fff;
+            position: absolute; left: -4px; display: none;
+        }
+        .channel.unread .unread-dot { display: block; }
+        .channel-badge {
+            margin-left: auto; background: var(--renk-tehlike); color: white;
+            font-size: 10px; font-weight: 700; min-width: 16px; height: 16px;
+            border-radius: 8px; display: flex; align-items: center;
+            justify-content: center; padding: 0 4px;
+        }
+
+        /* ── KULLANICI LİSTESİ ── */
         .user-list-header {
-            font-size: 12px; font-weight: 800; color: var(--renk-gri);
-            text-transform: uppercase; padding: 15px 15px 5px; letter-spacing: 0.5px;
-            display: flex; justify-content: space-between; align-items: center;
+            font-size: 11px; font-weight: 800; color: var(--renk-gri);
+            text-transform: uppercase; padding: 16px 8px 4px; letter-spacing: 0.5px;
         }
         .list-item {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 8px 15px; font-size: 14px; font-weight: 600; cursor: default;
-            border-radius: 6px; margin: 2px 10px; transition: 0.2s; color: #b5bac1;
+            display: flex; flex-direction: column; padding: 6px 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 4px;
+            margin: 1px 0; transition: 0.15s; color: var(--renk-gri);
         }
-        .list-item:hover { background-color: #35373c; color: #fff; }
-        .list-item-left { display: flex; align-items: center; gap: 10px; }
+        .list-item:hover { background: rgba(255,255,255,0.06); color: #dbdee1; }
+        .list-item-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+
+        /* Avatar */
+        .avatar-wrapper { position: relative; flex-shrink: 0; }
         .list-avatar {
-            width: 34px; height: 34px;
+            width: 32px; height: 32px;
             background: linear-gradient(135deg, var(--renk-aktif), #4752c4);
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 14px; font-weight: bold; color: white; border: 2px solid transparent;
-            transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.2); position: relative; flex-shrink: 0;
+            font-size: 13px; font-weight: bold; color: white;
+            border: 2px solid transparent; transition: 0.3s; position: relative;
+            overflow: hidden;
         }
-        .list-avatar.speaking {
-            border-color: var(--renk-basari);
-            box-shadow: 0 0 15px rgba(35, 165, 89, 0.8); transform: scale(1.05);
-        }
-        .list-avatar.muted-avatar::after {
-            content: ''; position: absolute;
-            width: 120%; height: 3px; background: var(--renk-tehlike);
-            transform: rotate(45deg); border-radius: 2px;
-        }
-        .status-icons { display: flex; gap: 5px; font-size: 12px; flex-shrink: 0; }
+        .list-avatar.speaking { border-color: var(--renk-basari); box-shadow: 0 0 12px rgba(35,165,89,0.8); transform: scale(1.05); }
+        .list-avatar.muted-avatar::after { content: ''; position: absolute; width: 120%; height: 3px; background: var(--renk-tehlike); transform: rotate(45deg); }
+        .durum-nokta { position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--sidebar-bg); }
+        .durum-online   { background: var(--renk-basari); }
+        .durum-mesgul   { background: var(--renk-uyari); }
+        .durum-dnd      { background: var(--renk-tehlike); }
+        .durum-gorunmez { background: var(--renk-gri); }
 
-        /* SOUND EFFECTS */
-        .sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 15px; }
+        .status-icons { display: flex; gap: 4px; font-size: 11px; }
+        .user-volume-container { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-left: 38px; }
+        .user-volume-container input { flex: 1; }
+        .dm-btn { background: none; border: none; color: var(--renk-gri); cursor: pointer; padding: 2px 5px; border-radius: 3px; font-size: 11px; transition: 0.15s; }
+        .dm-btn:hover { color: var(--renk-aktif); background: rgba(88,101,242,0.1); }
+
+        /* Ping kalitesi */
+        .kalite-cubuk { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
+        .kalite-cubuk span { width: 3px; border-radius: 1px; background: #4e5058; transition: background 0.4s; }
+        .kalite-cubuk span:nth-child(1) { height: 4px; }
+        .kalite-cubuk span:nth-child(2) { height: 8px; }
+        .kalite-cubuk span:nth-child(3) { height: 12px; }
+        .kalite-iyi  .kalite-cubuk span { background: var(--renk-basari); }
+        .kalite-orta .kalite-cubuk span:nth-child(1),
+        .kalite-orta .kalite-cubuk span:nth-child(2) { background: var(--renk-uyari); }
+        .kalite-kotu .kalite-cubuk span:nth-child(1) { background: var(--renk-tehlike); }
+        .ping-badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 8px; }
+        .ping-iyi  { background: rgba(35,165,89,0.2);   color: var(--renk-basari); }
+        .ping-orta { background: rgba(250,166,26,0.2);  color: var(--renk-uyari); }
+        .ping-kotu { background: rgba(237,66,69,0.2);   color: var(--renk-tehlike); }
+
+        /* Efekt paneli */
+        .sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 8px; }
         .side-btn {
-            border: 1px solid #1f2123; padding: 10px; border-radius: 8px; cursor: pointer;
-            color: white; font-weight: 600; transition: all 0.2s; font-size: 13px;
-            display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--renk-zemin);
+            border: 1px solid #1f2123; padding: 8px 6px; border-radius: 4px;
+            cursor: pointer; color: #dbdee1; font-weight: 600; transition: 0.15s;
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            gap: 6px; background: #1e1f22;
         }
-        .side-btn:hover { background: #4e5058; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .side-btn:hover { background: #35373c; }
 
-        /* USER PANEL */
+        /* ── ALT KULLANICI PANELİ ── */
         .user-panel {
-            background-color: #1a1b1e; padding: 12px 15px; display: flex;
-            align-items: center; justify-content: space-between; border-top: 1px solid #2b2d31;
+            background: #232428; padding: 8px 8px; display: flex;
+            align-items: center; justify-content: space-between;
+            border-top: 1px solid #1f2123; flex-shrink: 0;
         }
-        .controls { display: flex; gap: 5px; }
+        .controls { display: flex; gap: 2px; }
         .controls button {
-            background: #2b2d31; border: none; color: var(--renk-gri); font-size: 15px;
-            cursor: pointer; border-radius: 50%; transition: all 0.3s; display: flex;
-            justify-content: center; align-items: center; width: 38px; height: 38px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            background: none; border: none; color: var(--renk-gri); font-size: 16px;
+            cursor: pointer; border-radius: 4px; transition: 0.15s;
+            display: flex; justify-content: center; align-items: center; width: 36px; height: 36px;
         }
-        .controls button:hover { background-color: #35373c; transform: scale(1.05); color: #fff; }
-        .controls button.acik { color: var(--renk-basari); background: rgba(35, 165, 89, 0.15); }
-        .controls button.tehlike { color: var(--renk-tehlike); background: rgba(237, 66, 69, 0.15); }
-        .controls button:disabled { opacity: 0.4; cursor: not-allowed; }
-        .controls button:disabled:hover { transform: none; }
+        .controls button:hover { background: #35373c; color: #dbdee1; }
+        .controls button.acik  { color: #fff; }
+        .controls button.tehlike { color: var(--renk-tehlike); }
 
-        /* MAIN AREA */
+        /* Durum menüsü */
+        .durum-menu {
+            position: absolute; bottom: 56px; left: 72px;
+            background: #111214; border: 1px solid #35373c;
+            border-radius: 8px; padding: 6px; z-index: 99999;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.7); display: none; min-width: 160px;
+        }
+        .durum-menu.acik { display: block; }
+        .durum-menu-item {
+            display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.1s;
+        }
+        .durum-menu-item:hover { background: #35373c; }
+
+        /* ── ANA İÇERİK ── */
         .main {
-            flex: 1; padding: 20px; display: flex; flex-direction: column;
-            overflow-y: auto; background: radial-gradient(circle at top, var(--renk-zemin) 0%, #1e1f22 100%);
-            position: relative;
+            flex: 1; display: flex; flex-direction: column;
+            background: var(--renk-zemin); overflow: hidden;
         }
         .top-bar {
-            padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;
-            background: rgba(43, 45, 49, 0.8); backdrop-filter: blur(12px); border-radius: 12px;
-            margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            flex-shrink: 0;
+            padding: 0 16px; height: 48px; display: flex; align-items: center;
+            justify-content: space-between; background: var(--renk-zemin);
+            border-bottom: 1px solid #1f2123; flex-shrink: 0; gap: 10px;
         }
+        .top-bar-left  { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .top-bar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .top-bar-divider { width: 1px; height: 24px; background: #4e5058; margin: 0 4px; }
 
-        /* VIDEO GRID */
-        .video-grid {
-            display: flex; flex-wrap: wrap; gap: 20px; width: 100%;
-            max-width: 1600px; margin: 0 auto; justify-content: center; align-content: flex-start;
-        }
+        /* Video alanı */
+        .video-area { flex: 1; padding: 16px; overflow-y: auto; }
+        .video-grid { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
         .video-wrapper {
-            position: relative; background: #111; border-radius: 16px; overflow: hidden;
-            border: 2px solid #35373c; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            aspect-ratio: 16/9; width: 46%; min-width: 300px;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
+            position: relative; background: #111214; border-radius: 8px; overflow: hidden;
+            border: 1px solid #232428; aspect-ratio: 16/9; width: 46%; min-width: 280px;
+            transition: border-color 0.2s;
         }
-        .video-wrapper:hover { transform: translateY(-5px); border-color: var(--renk-aktif); box-shadow: 0 15px 35px rgba(88, 101, 242, 0.2); }
-        video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+        .video-wrapper:hover { border-color: var(--renk-aktif); }
+        .video-wrapper.speaking-border { border-color: var(--renk-basari); box-shadow: 0 0 8px rgba(35,165,89,0.4); }
+        video { width: 100%; height: 100%; object-fit: contain; display: block; }
         .video-label {
-            position: absolute; bottom: 12px; left: 12px;
-            background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-            padding: 5px 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
-            color: white; border: 1px solid rgba(255,255,255,0.1); z-index: 5;
-            display: flex; align-items: center; gap: 6px;
+            position: absolute; bottom: 8px; left: 8px;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 700;
+            color: white; z-index: 5;
         }
         .video-overlay {
-            position: absolute; top: 12px; right: 12px; display: flex; gap: 8px;
-            opacity: 0; transition: opacity 0.3s ease; z-index: 5;
+            position: absolute; top: 8px; right: 8px; display: flex; gap: 6px;
+            opacity: 0; transition: 0.2s; z-index: 5;
         }
         .video-wrapper:hover .video-overlay { opacity: 1; }
         .overlay-btn {
-            background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.2); color: white; padding: 7px 12px;
-            border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
-            display: flex; align-items: center; gap: 6px; transition: all 0.2s;
+            background: rgba(0,0,0,0.7); border: none; color: white;
+            padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+            font-weight: 600; display: flex; align-items: center; gap: 6px; transition: 0.15s;
         }
-        .overlay-btn:hover { background: var(--renk-aktif); border-color: var(--renk-aktif); transform: scale(1.05); }
+        .overlay-btn:hover { background: var(--renk-aktif); }
         .ses-seviyesi-bar {
-            position: absolute; bottom: 0; left: 0; height: 4px;
-            background: var(--renk-basari); width: 0%; transition: width 0.1s ease;
-            z-index: 5; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;
-        }
-        .ping-dot {
-            position: absolute; top: 12px; left: 12px; width: 10px; height: 10px;
-            border-radius: 50%; background: var(--renk-basari); z-index: 5;
-            box-shadow: 0 0 6px currentColor;
+            position: absolute; bottom: 0; left: 0; height: 3px;
+            background: var(--renk-basari); width: 0%; transition: width 0.1s ease; z-index: 5;
         }
 
-        /* REMOTE POINTER */
         #remote-pointer {
-            position: fixed; width: 22px; height: 22px; background: var(--renk-tehlike);
-            border: 3px solid white; border-radius: 50%; pointer-events: none; display: none;
-            z-index: 99999; box-shadow: 0 0 20px var(--renk-tehlike), 0 0 40px var(--renk-tehlike);
-            transform: translate(-50%, -50%); animation: pulseAnim 1s infinite;
+            position: fixed; width: 20px; height: 20px; background: var(--renk-tehlike);
+            border: 3px solid white; border-radius: 50%; pointer-events: none;
+            display: none; z-index: 99999; transform: translate(-50%, -50%);
+            animation: pulse 1s infinite;
         }
-        @keyframes pulseAnim {
-            0% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
-            100% { transform: translate(-50%, -50%) scale(1); }
-        }
+        @keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.2); } }
 
-        /* CHAT */
+        /* ── SOHBET PANELİ ── */
         .chat-panel {
-            width: 340px; background-color: #2b2d31; border-left: 1px solid #1f2123;
-            display: flex; flex-direction: column; box-shadow: -2px 0 15px rgba(0,0,0,0.2);
+            width: 340px; background: #313338; border-left: 1px solid #1f2123;
+            display: flex; flex-direction: column;
         }
         .chat-header {
-            padding: 20px; font-weight: 800; border-bottom: 1px solid #1f2123; color: #fff;
-            background: linear-gradient(180deg, #2b2d31 0%, #232428 100%);
-            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 16px; height: 48px; display: flex; align-items: center;
+            justify-content: space-between; border-bottom: 1px solid #1f2123;
+            font-weight: 800; font-size: 15px; flex-shrink: 0;
         }
-        .chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .msg-container {
-            display: flex; flex-direction: column; background: var(--renk-zemin);
-            padding: 10px 14px; border-radius: 12px; border-bottom-left-radius: 2px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .msg-container.benim {
-            background: rgba(88, 101, 242, 0.12); border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 2px; border: 1px solid rgba(88, 101, 242, 0.2);
-            align-self: flex-end; max-width: 90%;
-        }
-        .chat-input-box {
-            background: #383a40; margin: 12px 15px 20px; border-radius: 12px;
-            display: flex; align-items: center; padding: 6px 12px;
-            border: 1px solid #4e5058; transition: 0.3s; position: relative;
-        }
-        .chat-input-box:focus-within { border-color: var(--renk-aktif); box-shadow: 0 0 10px rgba(88, 101, 242, 0.2); }
-        .chat-input-box input { flex: 1; background: transparent; border: none; color: #dbdee1; padding: 10px 8px; outline: none; font-size: 14px; }
-        .chat-icon-btn { background: none; border: none; color: #b5bac1; font-size: 18px; cursor: pointer; padding: 4px; transition: 0.2s; border-radius: 4px; }
-        .chat-icon-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
 
-        /* EMOJI PICKER */
+        /* Sohbet sekmeleri */
+        .chat-sekme-bar { display: flex; background: #2b2d31; border-bottom: 1px solid #1f2123; flex-shrink: 0; }
+        .chat-sekme {
+            flex: 1; padding: 8px; font-size: 13px; font-weight: 700; border: none;
+            background: none; color: var(--renk-gri); cursor: pointer;
+            border-bottom: 2px solid transparent; transition: 0.15s;
+        }
+        .chat-sekme.aktif { color: #fff; border-bottom-color: var(--renk-aktif); }
+        .chat-sekme:hover:not(.aktif) { color: #dbdee1; background: rgba(255,255,255,0.03); }
+
+        .chat-messages {
+            flex: 1; padding: 16px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+
+        /* Discord tarzı mesaj stili */
+        .msg-group { margin-bottom: 16px; }
+        .msg-group-header { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+        .msg-avatar-small {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--renk-aktif), #4752c4);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: bold; color: white; flex-shrink: 0;
+        }
+        .msg-meta { display: flex; align-items: baseline; gap: 8px; }
+        .msg-isim { font-weight: 700; font-size: 15px; color: #fff; }
+        .msg-isim.benim { color: var(--renk-aktif); }
+        .msg-saat { font-size: 11px; color: var(--renk-gri); }
+        .msg-body { padding-left: 52px; color: #dbdee1; font-size: 14px; line-height: 1.5; position: relative; }
+        .msg-body:hover .msg-actions { opacity: 1; }
+        .msg-actions {
+            position: absolute; right: 0; top: -10px; background: #2b2d31;
+            border: 1px solid #4e5058; border-radius: 4px; padding: 2px;
+            display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; z-index: 10;
+        }
+        .msg-action-btn {
+            background: none; border: none; color: var(--renk-gri); cursor: pointer;
+            padding: 4px 6px; border-radius: 3px; font-size: 13px; transition: 0.1s;
+        }
+        .msg-action-btn:hover { background: #35373c; color: #dbdee1; }
+
+        /* Reaksiyonlar */
+        .msg-reaksiyonlar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+        .reaksiyon-chip {
+            background: rgba(88,101,242,0.12); border: 1px solid rgba(88,101,242,0.3);
+            border-radius: 10px; padding: 1px 6px; font-size: 13px; cursor: pointer;
+            transition: 0.1s; display: flex; align-items: center; gap: 3px;
+        }
+        .reaksiyon-chip:hover { background: rgba(88,101,242,0.25); }
+        .reaksiyon-sayi { font-size: 11px; font-weight: 700; color: var(--renk-aktif); }
+
+        /* Link önizleme */
+        .link-onizleme {
+            background: #2b2d31; border-left: 3px solid var(--renk-aktif);
+            border-radius: 4px; padding: 8px 10px; margin-top: 6px; font-size: 12px;
+            max-width: 260px;
+        }
+        .link-onizleme-title { font-weight: 700; color: #dbdee1; margin-bottom: 2px; }
+        .link-onizleme-url   { color: var(--renk-gri); word-break: break-all; font-size: 11px; }
+
+        /* Chat input */
+        .chat-input-area { padding: 0 16px 16px; flex-shrink: 0; }
+        .chat-input-box {
+            background: #383a40; border-radius: 8px; display: flex; align-items: center;
+            padding: 0 12px; border: 1px solid #1f2123;
+        }
+        .chat-input-box:focus-within { border-color: #4e5058; }
+        .chat-input-box input {
+            flex: 1; background: transparent; border: none; color: #dbdee1;
+            padding: 11px 8px; outline: none; font-size: 14px;
+        }
+        .chat-input-box input::placeholder { color: var(--renk-gri); }
+        .chat-icon-btn { background: none; border: none; color: #b5bac1; font-size: 18px; cursor: pointer; padding: 6px; transition: 0.15s; border-radius: 4px; }
+        .chat-icon-btn:hover { color: #dbdee1; background: #4e5058; }
+
+        /* Emoji picker */
         .emoji-picker {
-            display: none; position: absolute; bottom: 56px; left: 0;
-            background: #2b2d31; border: 1px solid #4e5058; border-radius: 10px;
-            padding: 10px; width: 230px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: none; position: absolute; bottom: 62px; right: 0;
+            background: #2b2d31; border: 1px solid #4e5058; border-radius: 8px;
+            padding: 10px; width: 240px; box-shadow: 0 5px 20px rgba(0,0,0,0.6);
             z-index: 1000; grid-template-columns: repeat(5, 1fr); gap: 4px;
         }
-        .emoji-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 6px; border-radius: 6px; transition: 0.15s; }
-        .emoji-btn:hover { background: #35373c; transform: scale(1.15); }
+        .emoji-btn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 5px; border-radius: 4px; transition: 0.1s; }
+        .emoji-btn:hover { background: #35373c; transform: scale(1.1); }
 
-        /* TOAST & BADGE */
-        #toast-container {
-            position: fixed; bottom: 20px; left: 20px; z-index: 999999;
-            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+        /* DM paneli */
+        .dm-kisi-liste { padding: 8px; border-bottom: 1px solid #1f2123; max-height: 110px; overflow-y: auto; flex-shrink: 0; }
+        .dm-kisi-item {
+            display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+            border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.1s;
         }
+        .dm-kisi-item:hover, .dm-kisi-item.aktif { background: #35373c; color: #dbdee1; }
+        .dm-badge {
+            background: var(--renk-tehlike); color: white; font-size: 10px; font-weight: 700;
+            min-width: 16px; height: 16px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; padding: 0 4px; margin-left: auto;
+        }
+
+        /* ── TOASTLAR ── */
+        #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 999999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
         .toast {
-            background: #2b2d31; color: white; padding: 12px 18px; border-radius: 10px;
-            font-weight: 600; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            border-left: 4px solid var(--renk-basari);
-            animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;
-            display: flex; align-items: center; gap: 10px;
+            background: #23a559; color: white; padding: 10px 16px; border-radius: 6px;
+            font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            animation: toastIn 0.25s ease-out, toastOut 0.25s ease-in 3s forwards;
+            display: flex; align-items: center; gap: 8px; max-width: 300px;
         }
-        .toast.leave { border-left-color: var(--renk-tehlike); }
-        @keyframes slideIn { from { transform: translateX(-110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes fadeOut { to { opacity: 0; transform: translateY(8px); } }
-        .chat-badge {
-            position: absolute; top: -5px; right: 25%;
-            background: var(--renk-tehlike); color: white; font-size: 10px; font-weight: bold;
-            min-width: 18px; height: 18px; display: none; align-items: center;
-            justify-content: center; border-radius: 50%; border: 2px solid #1a1b1e; padding: 0 3px;
-        }
+        .toast.uyari { background: var(--renk-uyari); }
+        .toast.hata  { background: var(--renk-tehlike); }
+        .toast.bilgi { background: var(--renk-aktif); }
+        @keyframes toastIn  { from { transform: translateX(-110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes toastOut { to   { opacity: 0; transform: translateY(4px); } }
 
-        /* MODALS */
+        /* ── MODALLER ── */
         .modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.85); z-index: 100000;
-            align-items: center; justify-content: center; backdrop-filter: blur(6px);
+            align-items: center; justify-content: center; backdrop-filter: blur(4px);
         }
         .modal-content {
-            background: #2b2d31; padding: 28px; border-radius: 14px; width: 420px;
-            border: 1px solid #4e5058; box-shadow: 0 16px 48px rgba(0,0,0,0.6); color: #dbdee1;
+            background: #313338; padding: 24px; border-radius: 8px;
+            width: 440px; border: 1px solid #4e5058;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6); color: #dbdee1;
         }
-        .modal-content h3 { margin-top: 0; color: #fff; display: flex; align-items: center; gap: 10px; font-size: 18px; }
+        .modal-content h3 { margin: 0 0 20px; color: #fff; display: flex; align-items: center; gap: 10px; font-size: 16px; }
         .modal-btn {
-            background: var(--renk-aktif); border: none; color: white; padding: 10px 22px;
-            border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s;
+            background: var(--renk-aktif); border: none; color: white;
+            padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 700;
+            font-size: 14px; transition: 0.15s;
         }
-        .modal-btn:hover { opacity: 0.85; }
-        .modal-btn.danger { background: var(--renk-tehlike); }
-        .modal-input {
-            width: 100%; padding: 12px; margin-top: 12px; background: #1e1f22;
-            border: 1px solid #4e5058; color: white; border-radius: 8px;
-            font-size: 15px; outline: none; transition: 0.2s;
+        .modal-btn:hover { filter: brightness(1.1); }
+        .settings-group { margin-bottom: 16px; }
+        .settings-group label { display: block; font-size: 11px; color: var(--renk-gri); font-weight: 800; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .settings-group select, .settings-group input[type="text"] {
+            width: 100%; padding: 9px; background: #1e1f22; border: 1px solid #4e5058;
+            color: white; border-radius: 4px; outline: none; font-family: inherit; font-size: 14px;
         }
-        .modal-input:focus { border-color: var(--renk-aktif); }
+        .settings-group select:focus, .settings-group input:focus { border-color: var(--renk-aktif); }
 
-        /* MOBILE */
+        /* ── DnD OVERLAY ── */
+        #dnd-overlay { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 999997; border: 3px solid var(--renk-tehlike); box-shadow: inset 0 0 40px rgba(237,66,69,0.1); }
+        #dnd-badge { display: none; position: fixed; top: 38px; right: 10px; background: var(--renk-tehlike); color: white; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 10px; z-index: 999998; }
+
+        /* ── CHAT BADGE ── */
+        .chat-badge {
+            background: var(--renk-tehlike); color: white; font-size: 10px; font-weight: bold;
+            min-width: 16px; height: 16px; border-radius: 8px;
+            display: none; align-items: center; justify-content: center; padding: 0 3px;
+        }
+
+        /* ── MOBİL ── */
         .mobile-nav { display: none; }
-
         @media (max-width: 850px) {
-            body { padding-top: 0; overflow: hidden !important; display: flex !important; flex-direction: column; }
-            #bascord-title-bar { display: none; }
-            .main { display: none !important; padding: 10px; padding-bottom: 80px !important; width: 100%; flex-direction: column; overflow-y: auto; }
-            .video-grid { flex-direction: column; gap: 12px; }
+            body { padding-top: 0; overflow: hidden !important; flex-direction: column; }
+            #bascord-title-bar, .server-strip { display: none; }
+            .main { display: none !important; width: 100%; height: 100%; }
+            .sidebar { width: 100%; height: calc(100vh - 60px) !important; border-right: none; overflow-y: auto; }
+            .chat-panel { display: none !important; width: 100%; height: calc(100vh - 60px) !important; border-left: none; }
             .video-wrapper { width: 100%; min-width: 100%; }
-            .video-overlay { opacity: 1; }
-            .sidebar { display: flex !important; width: 100%; height: calc(100vh - 70px) !important; overflow-y: auto; border-right: none; padding-bottom: 20px; }
-            .chat-panel { display: none !important; width: 100%; height: calc(100vh - 70px) !important; border-left: none; }
-            .user-panel { position: relative; bottom: 0; z-index: 10; }
+            .user-panel { border-bottom: 1px solid #1f2123; }
             .mobile-nav {
                 display: flex; justify-content: space-around; background: #1a1b1e;
-                position: fixed; bottom: 0; left: 0; width: 100%; height: 70px;
+                position: fixed; bottom: 0; left: 0; width: 100%; height: 60px;
                 border-top: 1px solid #2b2d31; z-index: 999999;
-                padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
             }
             .nav-btn {
                 position: relative; background: none; border: none; color: var(--renk-gri);
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
-                width: 100%; gap: 5px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s;
+                width: 100%; gap: 4px; font-size: 11px; font-weight: 700; cursor: pointer;
             }
-            .nav-btn i { font-size: 20px; }
             .nav-btn.active { color: #fff; }
             .nav-btn.active i { color: var(--renk-aktif); }
         }
 
-        /* PTT MOBILE BUTTON */
         #mobilePttBtn {
-            display: none; position: fixed; bottom: 90px; right: 20px;
-            background: var(--renk-aktif); color: white; width: 68px; height: 68px;
-            border-radius: 50%; border: 4px solid #1e1f22; box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-            z-index: 99999; font-size: 26px; text-align: center; line-height: 58px;
-            user-select: none; -webkit-user-select: none; cursor: pointer;
+            display: none; position: fixed; bottom: 80px; right: 20px;
+            background: var(--renk-aktif); color: white; width: 64px; height: 64px;
+            border-radius: 50%; border: 4px solid #1e1f22;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5); z-index: 99999;
+            font-size: 22px; text-align: center; line-height: 56px; user-select: none;
         }
-        #mobilePttBtn:active { background: var(--renk-basari); transform: scale(0.94); }
-
-        /* NO-DRAG REGION */
+        #mobilePttBtn:active { background: var(--renk-basari); }
         .sidebar, .main, .chat-panel { -webkit-app-region: no-drag; pointer-events: auto; }
 
-        /* SPEAKING INDICATOR */
-        .speaking-label { color: var(--renk-basari); font-size: 13px; font-weight: 700; }
+        /* ── ANİMASYON ── */
+        @keyframes msgIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-group { animation: msgIn 0.15s ease-out; }
 
-        /* TOAST WARN */
-        .toast.warn { border-left-color: #faa61a; }
+        /* ── ARAMA ── */
+        .search-box {
+            background: #1e1f22; border: none; border-radius: 4px;
+            color: #dbdee1; padding: 4px 10px; font-size: 13px;
+            width: 140px; outline: none;
+        }
+        .search-box::placeholder { color: var(--renk-gri); }
+        .search-box:focus { outline: 1px solid var(--renk-aktif); }
 
-        /* SKELETON / BAĞLANIYOR GÖSTERGESİ */
-        .video-skeleton {
-            position: absolute; inset: 0; z-index: 4;
-            background: linear-gradient(135deg, #1a1b1e 0%, #2b2d31 50%, #1a1b1e 100%);
-            background-size: 200% 200%;
-            animation: skeletonPulse 1.5s ease-in-out infinite;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+        /* Yazıyor göstergesi */
+        .yaziyor-indicator {
+            font-size: 12px; color: var(--renk-gri); font-style: italic;
+            padding: 4px 16px; min-height: 20px; flex-shrink: 0;
         }
-        @keyframes skeletonPulse {
-            0%   { background-position: 0% 50%; }
-            50%  { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        .skeleton-spinner {
-            width: 32px; height: 32px; border: 3px solid #4e5058;
-            border-top-color: var(--renk-aktif); border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .skeleton-text { color: var(--renk-gri); font-size: 13px; font-weight: 600; }
-
-        /* PING LABEL */
-        .ping-label {
-            position: absolute; top: 12px; left: 28px; z-index: 6;
-            font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-        }
-
-        /* SES SEVİYESİ SLIDER */
-        .vol-wrap {
-            display: flex; align-items: center; gap: 5px;
-            background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.2); padding: 6px 10px;
-            border-radius: 8px;
-        }
-        .vol-slider {
-            -webkit-appearance: none; appearance: none;
-            width: 70px; height: 4px; border-radius: 2px;
-            background: #4e5058; outline: none; cursor: pointer;
-        }
-        .vol-slider::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 14px; height: 14px;
-            border-radius: 50%; background: var(--renk-aktif); cursor: pointer;
-        }
-        .vol-slider::-moz-range-thumb {
-            width: 14px; height: 14px; border-radius: 50%;
-            background: var(--renk-aktif); cursor: pointer; border: none;
-        }
-
-        /* TOAST WARN */
-        .toast.warn { border-left-color: #faa61a; }
-        .video-skeleton { position:absolute;inset:0;z-index:4;background:#1a1b1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px; }
-        .skeleton-spinner { width:32px;height:32px;border:3px solid #4e5058;border-top-color:var(--renk-aktif);border-radius:50%;animation:spin 0.8s linear infinite; }
-        @keyframes spin { to{transform:rotate(360deg);} }
-        .skeleton-text { color:var(--renk-gri);font-size:13px;font-weight:600; }
-        .ping-label { position:absolute;top:12px;left:28px;z-index:6;display:none;font-size:10px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,0.8); }
-        .vol-wrap { display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.2);padding:6px 10px;border-radius:8px; }
-        .vol-slider { -webkit-appearance:none;appearance:none;width:70px;height:4px;border-radius:2px;background:#4e5058;outline:none;cursor:pointer; }
-        .vol-slider::-webkit-slider-thumb { -webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--renk-aktif);cursor:pointer; }
-        #diagPanel { display:none;position:fixed;bottom:0;right:0;width:440px;height:260px;background:rgba(0,0,0,.93);border:1px solid #4e5058;border-radius:12px 0 0 0;z-index:9999999;flex-direction:column;font-family:monospace; }
-        #diagHeader { padding:8px 12px;background:#1a1b1e;border-bottom:1px solid #333;font-size:12px;font-weight:700;color:var(--renk-aktif);display:flex;justify-content:space-between;align-items:center;border-radius:12px 0 0 0; }
-        #diagLogs { flex:1;overflow-y:auto;padding:6px 10px; }
-        #diagClear { background:#4e5058;border:none;color:white;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px; }
-        #odaKoduGostergesi { display:none;background:rgba(88,101,242,.2);border:1px solid var(--renk-aktif);color:var(--renk-aktif);padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;letter-spacing:1px; }
-        #odaKoduGostergesi:hover { background:rgba(88,101,242,.4); }
+        .yaziyor-nokta { display: inline-block; animation: yaziyorBounce 1.2s infinite; }
+        .yaziyor-nokta:nth-child(2) { animation-delay: 0.2s; }
+        .yaziyor-nokta:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes yaziyorBounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-4px); } }
     </style>
 </head>
 <body>
 
-    <!-- TITLE BAR -->
+    <!-- ── TITLE BAR ── -->
     <div id="bascord-title-bar">
         <div class="drag-region">
             <i class="fas fa-headset bar-icon"></i>
-            <span class="bar-text">BASCORD PREMIUM</span>
+            <span>BASCORD PREMIUM</span>
         </div>
         <div class="window-controls">
             <button id="min-btn" title="Küçült"><i class="fas fa-minus"></i></button>
@@ -410,171 +520,283 @@
         </div>
     </div>
 
-    <!-- TOAST NOTIFICATIONS -->
-    <div id="toast-container"></div>
-
-    <!-- REMOTE POINTER (Lazer İşaretçi) -->
-    <div id="remote-pointer"></div>
-
-    <!-- MODAL: İsim Değiştir -->
+    <!-- ── MODALLER ── -->
     <div id="isimModal" class="modal">
         <div class="modal-content">
-            <h3><i class="fas fa-user-edit" style="color:var(--renk-aktif);"></i> İsmini Değiştir</h3>
-            <input type="text" id="yeniIsimInput" class="modal-input" placeholder="Yeni isminiz...">
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
-                <button class="modal-btn" style="background:#4e5058;" onclick="document.getElementById('isimModal').style.display='none'">İptal</button>
-                <button class="modal-btn" id="isimKaydetBtn">Kaydet</button>
+            <h3><i class="fas fa-cog" style="color:var(--renk-aktif)"></i> Kullanıcı & Cihaz Ayarları</h3>
+            <div class="settings-group">
+                <label>Kullanıcı Adın</label>
+                <input type="text" id="yeniIsimInput" placeholder="İsminiz...">
             </div>
-        </div>
-    </div>
-
-    <!-- MODAL: Ekran Seçici (Electron) -->
-    <div id="ekranSeciciModal" class="modal">
-        <div class="modal-content" style="width:720px; max-height:80vh; display:flex; flex-direction:column; padding:20px;">
-            <h3><i class="fas fa-desktop" style="color:var(--renk-aktif);"></i> Paylaşılacak Ekranı Seç</h3>
-            <div id="ekranListesi" style="display:flex; flex-wrap:wrap; gap:14px; overflow-y:auto; margin-top:14px; padding:4px; max-height:50vh; justify-content:center;"></div>
-            <div style="display:flex; justify-content:flex-end; margin-top:18px;">
-                <button class="modal-btn danger" onclick="ekranPaylasiminiIptalEt()">İptal</button>
+            <div class="settings-group">
+                <label>Mikrofon</label>
+                <select id="micSelect"><option value="default">Sistem Varsayılanı</option></select>
             </div>
-        </div>
-    </div>
-
-    <!-- MODAL: Oyun Yayını İpuçları -->
-    <div id="ipucuModal" class="modal">
-        <div class="modal-content">
-            <h3><i class="fas fa-lightbulb" style="color:#faa61a;"></i> Oyun Penceresi İpuçları</h3>
-            <p style="line-height:1.7; color:#b5bac1;">Oyununu arkadaşına izletmek için:</p>
-            <ul style="line-height:2; padding-left:20px; color:#b5bac1;">
-                <li>Oyun ayarlarından <b style="color:#fff;">"Pencereli Tam Ekran" (Borderless)</b> seç.</li>
-                <li>Uygulamayı <b style="color:#fff;">"Yönetici Olarak Çalıştır"</b>.</li>
-                <li>Ekran paylaşımında <b style="color:#fff;">pencere adını</b> listeden seç.</li>
-            </ul>
-            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                <button class="modal-btn" onclick="document.getElementById('ipucuModal').style.display='none'">Anladım</button>
+            <div class="settings-group">
+                <label>Kamera</label>
+                <select id="camSelect"><option value="default">Sistem Varsayılanı</option></select>
             </div>
-        </div>
-    </div>
-
-    <!-- AUDIO CONTAINER (gizli, ses elementleri buraya eklenir) -->
-    <div id="remoteAudioContainer" style="display:none;"></div>
-
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-        <div class="server-header">
-            <span><i class="fas fa-server" style="margin-right:10px; color:var(--renk-aktif);"></i>Bascord</span>
-            <span id="kisiSayaci" style="background:#1e1f22; padding:4px 10px; border-radius:12px; font-size:12px; color:var(--renk-gri);">0 Online</span>
-        </div>
-
-        <div class="channels">
-            <div class="user-list-header" style="padding:0 0 8px 3px;">🔊 Kanallar</div>
-            <button class="channel" id="kanalaKatilBtn"><i class="fas fa-headphones" style="font-size:16px;"></i> Ses Kanalına Katıl</button>
-            <button class="channel" id="pttToggleBtn"><i class="fas fa-keyboard" style="font-size:16px;"></i> Bas-Konuş: KAPALI</button>
-            <button id="gamerModBtn" class="channel" style="background: linear-gradient(135deg, #faa61a, #e68d00); color:white; display:none;">
-                <i class="fas fa-gamepad" style="font-size:16px;"></i> Gamer Mod
-            </button>
-        </div>
-
-        <div class="user-list-header">🎵 Ses Efektleri</div>
-        <div class="sb-grid">
-            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/air-horn-club-remix-short.mp3')" class="side-btn"><i class="fas fa-bullhorn" style="color:#faa61a"></i> Korna</button>
-            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/applause-8.mp3')" class="side-btn"><i class="fas fa-hands-clapping" style="color:var(--renk-aktif)"></i> Alkış</button>
-        </div>
-
-        <div class="user-list-header">
-            <span>👥 Odadakiler</span>
-        </div>
-        <div id="aktifKullanicilarListesi" style="flex:1; overflow-y:auto; padding-bottom:10px;"></div>
-
-        <div class="user-panel">
-            <div style="display:flex; align-items:center; cursor:pointer; flex:1; min-width:0;" id="isimDegistirBtn" title="İsmini Değiştir">
-                <div id="benimAvatarim" class="list-avatar" style="width:38px; height:38px; font-size:15px; flex-shrink:0;">?</div>
-                <div style="margin-left:10px; line-height:1.3; min-width:0; overflow:hidden;">
-                    <div id="benimAdimGosterge" style="font-weight:700; font-size:13px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">...</div>
-                    <div style="color:var(--renk-gri); font-size:11px; font-weight:600;"><i class="fas fa-cog"></i> Ayarlar</div>
+            <div class="settings-group">
+                <label>Mikrofon Testi</label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button onclick="mikrofonTestBaslat()" class="modal-btn" style="background:#35373c; font-size:12px; padding:6px 10px;">▶ Test</button>
+                    <div style="flex:1; height:6px; background:#1e1f22; border-radius:3px; overflow:hidden;">
+                        <div id="testMeterFill" style="height:100%; width:0%; background:var(--renk-basari); transition:width 0.1s;"></div>
+                    </div>
                 </div>
             </div>
-            <div class="controls">
-                <button id="mikrofonBtn" disabled title="Mikrofonu Aç/Kapat"><i class="fas fa-microphone-slash" id="mik-icon"></i></button>
-                <button id="kulaklikBtn" disabled title="Sesi Tamamen Kapat (Deafen)"><i class="fas fa-headphones" id="kulak-icon"></i></button>
-                <button id="kameraBtn" disabled title="Kamerayı Aç/Kapat"><i class="fas fa-video-slash" id="kam-icon"></i></button>
-                <button id="kameraCevirBtn" style="display:none;" title="Kamerayı Çevir"><i class="fas fa-sync-alt"></i></button>
-                <button id="ekranBtn" disabled title="Ekran Paylaşımı"><i class="fas fa-desktop" id="ekran-icon"></i></button>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+                <button class="modal-btn" style="background:#4e5058;" onclick="document.getElementById('isimModal').style.display='none'">İptal</button>
+                <button class="modal-btn" id="isimKaydetBtn" style="background:var(--renk-basari);">Kaydet & Yenile</button>
             </div>
         </div>
     </div>
 
-    <!-- MAIN CONTENT -->
+    <div id="ekranSeciciModal" class="modal">
+        <div class="modal-content" style="width:680px; max-height:80vh; display:flex; flex-direction:column; padding:20px;">
+            <h3><i class="fas fa-desktop" style="color:var(--renk-aktif)"></i> Ekranı Seç</h3>
+            <div id="ekranListesi" style="display:flex; flex-wrap:wrap; gap:12px; overflow-y:auto; padding:4px; max-height:50vh; justify-content:center; margin-top:12px;"></div>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+                <button class="modal-btn" style="background:var(--renk-tehlike);" onclick="ekranPaylasiminiIptalEt()">İptal</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ipucuModal" class="modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-lightbulb" style="color:var(--renk-uyari)"></i> Oyun Penceresi İpuçları</h3>
+            <p style="line-height:1.6;">Oyununu paylaşmak için:</p>
+            <ul style="padding-left:20px; margin-top:8px; line-height:1.8;">
+                <li>Oyun ayarlarından <b>"Pencereli Tam Ekran"</b> seç</li>
+                <li>Uygulamayı <b>"Yönetici Olarak Çalıştır"</b></li>
+            </ul>
+            <div style="text-align:right; margin-top:16px;">
+                <button class="modal-btn" onclick="document.getElementById('ipucuModal').style.display='none'">Tamam</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── DnD OVERLAY ── -->
+    <div id="dnd-overlay"></div>
+    <div id="dnd-badge"><i class="fas fa-moon"></i> Rahatsız Etme</div>
+    <div id="toast-container"></div>
+    <div id="remote-pointer"></div>
+    <div id="remoteAudioContainer"></div>
+
+    <!-- ══════════════════════════════════════════
+         ANA LAYOUT: sunucu şeridi + sidebar + ana + chat
+         ══════════════════════════════════════════ -->
+
+    <!-- Sunucu ikon şeridi (Discord'un en sol sütunu) -->
+    <div class="server-strip" id="serverStrip">
+        <div class="server-icon active" title="Bascord" style="background:var(--renk-aktif);">
+            <i class="fas fa-meteor"></i>
+        </div>
+        <div class="server-divider"></div>
+        <button class="server-add-btn" title="Sunucu Ekle" onclick="showToast('Yakında: Çoklu sunucu desteği 🚀', 'bilgi')">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+    <!-- ── SIDEBAR ── -->
+    <div class="sidebar">
+        <div class="server-header">
+            <span>Bascord Premium</span>
+            <i class="fas fa-chevron-down" style="font-size:12px; color:var(--renk-gri);"></i>
+        </div>
+
+        <!-- Ses Kanalları -->
+        <div class="kanal-listesi" style="padding-top:8px;">
+            <div class="kanal-kategori">
+                <span><i class="fas fa-chevron-down" style="font-size:9px; margin-right:4px;"></i> Ses Kanalları</span>
+                <i class="fas fa-plus" style="font-size:12px;" title="Kanal Ekle"></i>
+            </div>
+            <button class="channel active" id="kanalaKatilBtn" style="padding:8px;">
+                <span class="unread-dot"></span>
+                <i class="fas fa-volume-up" style="font-size:14px; color:var(--renk-gri);"></i>
+                <span>genel</span>
+            </button>
+            <button class="channel" id="pttToggleBtn">
+                <span class="unread-dot"></span>
+                <i class="fas fa-keyboard" style="font-size:14px; color:var(--renk-gri);"></i>
+                <span>Bas-Konuş: KAPALI</span>
+            </button>
+            <button id="gamerModBtn" class="channel" style="display:none;">
+                <i class="fas fa-gamepad" style="font-size:14px; color:var(--renk-uyari);"></i>
+                <span>Gamer Mod</span>
+            </button>
+        </div>
+
+        <!-- Efekt Panosu -->
+        <div class="kanal-kategori" style="margin-top:8px;">
+            <span>🎵 Efekt Panosu</span>
+        </div>
+        <div class="sb-grid">
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/air-horn-club-remix-short.mp3')" class="side-btn">
+                <i class="fas fa-bullhorn" style="color:var(--renk-uyari)"></i> Korna
+            </button>
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/applause-8.mp3')" class="side-btn">
+                <i class="fas fa-hands-clapping" style="color:var(--renk-aktif)"></i> Alkış
+            </button>
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/mlg-airhorn.mp3')" class="side-btn">
+                <i class="fas fa-music" style="color:var(--renk-nitro)"></i> MLG
+            </button>
+            <button onclick="sesGonder('https://www.myinstants.com/media/sounds/vine-boom.mp3')" class="side-btn">
+                <i class="fas fa-bomb" style="color:var(--renk-tehlike)"></i> Boom
+            </button>
+        </div>
+
+        <!-- Odadakiler -->
+        <div class="kanal-kategori" style="margin-top:4px;">
+            <span>Odadakiler — <span id="kisiSayaci" style="color:var(--renk-basari);">0</span></span>
+            <!-- Ping göstergesi -->
+            <div id="pingGosterge" style="display:flex; align-items:center; gap:4px;">
+                <div class="kalite-cubuk" id="kaliteCubuk"><span></span><span></span><span></span></div>
+                <span id="pingMs" class="ping-badge ping-iyi">--</span>
+            </div>
+        </div>
+        <div id="aktifKullanicilarListesi" style="flex:1; overflow-y:auto; padding-bottom:8px;"></div>
+
+        <!-- Durum menüsü -->
+        <div id="durumMenu" class="durum-menu">
+            <div class="durum-menu-item" onclick="durumDegistir('online')">
+                <span style="width:10px;height:10px;border-radius:50%;background:var(--renk-basari);flex-shrink:0;"></span> Çevrimiçi
+            </div>
+            <div class="durum-menu-item" onclick="durumDegistir('mesgul')">
+                <span style="width:10px;height:10px;border-radius:50%;background:var(--renk-uyari);flex-shrink:0;"></span> Meşgul
+            </div>
+            <div class="durum-menu-item" onclick="durumDegistir('dnd')">
+                <span style="width:10px;height:10px;border-radius:50%;background:var(--renk-tehlike);flex-shrink:0;"></span> Rahatsız Etme
+            </div>
+            <div class="durum-menu-item" onclick="durumDegistir('gorunmez')">
+                <span style="width:10px;height:10px;border-radius:50%;background:var(--renk-gri);flex-shrink:0;"></span> Görünmez
+            </div>
+        </div>
+
+        <!-- Kullanıcı Paneli -->
+        <div class="user-panel">
+            <div style="display:flex; align-items:center; cursor:pointer; flex:1; min-width:0;" id="isimDegistirBtn">
+                <div class="avatar-wrapper">
+                    <div id="benimAvatarim" class="list-avatar" style="width:32px;height:32px;font-size:14px;">?</div>
+                    <div class="durum-nokta durum-online" id="benimDurumNokta"></div>
+                </div>
+                <div style="margin-left:8px; min-width:0; overflow:hidden;">
+                    <div id="benimAdimGosterge" style="font-weight:700; font-size:13px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">...</div>
+                    <div style="color:var(--renk-gri); font-size:11px;" id="benimDurumYazisi">Çevrimiçi</div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:2px;">
+                <button id="durumDegistirBtn" title="Durumu Değiştir" style="background:none;border:none;color:var(--renk-gri);cursor:pointer;padding:6px;border-radius:4px;font-size:13px;transition:0.1s;" onmouseenter="this.style.background='#35373c'" onmouseleave="this.style.background='none'">
+                    <i class="fas fa-circle" id="benimDurumIkonu" style="color:var(--renk-basari);font-size:10px;"></i>
+                </button>
+                <div class="controls">
+                    <button id="mikrofonBtn" disabled title="Mikrofon (M)"><i class="fas fa-microphone-slash" id="mik-icon"></i></button>
+                    <button id="kulaklikBtn" disabled title="Sesi Kapat (H)"><i class="fas fa-headphones" id="kulak-icon"></i></button>
+                    <button id="kameraBtn" disabled title="Kamera (V)"><i class="fas fa-video-slash" id="kam-icon"></i></button>
+                    <button id="kameraCevirBtn" style="display:none;" title="Kamera Çevir"><i class="fas fa-sync-alt"></i></button>
+                    <button id="ekranBtn" disabled title="Ekran Paylaş"><i class="fas fa-desktop" id="ekran-icon"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ANA İÇERİK ── -->
     <div class="main">
         <div class="top-bar">
-            <span style="color:#fff; font-weight:800; font-size:15px; display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                <i class="fas fa-hashtag" style="color:var(--renk-gri);"></i> genel-ses-kanali
-                <i class="fas fa-info-circle" style="color:#faa61a; font-size:13px; cursor:pointer;" onclick="document.getElementById('ipucuModal').style.display='flex'" title="İpuçları"></i>
-            </span>
-            <div id="aktifKonusanInfo" style="color:var(--renk-basari); font-size:13px; font-weight:700; flex:1; text-align:center;"></div>
-            <span id="odaKoduGostergesi" onclick="odaKoduPaylas()" title="Tıkla: Oda linkini kopyala"></span>
-            <button onclick="yeniOdaOlustur()" title="Yeni özel oda oluştur" style="background:#1e1f22; border:1px solid #4e5058; color:var(--renk-gri); padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; font-weight:700; flex-shrink:0;">
-                <i class="fas fa-plus-square"></i> Yeni Oda
-            </button>
-            <select id="kaliteSecici" style="background:#1e1f22; color:#fff; border:1px solid #4e5058; padding:7px 12px; border-radius:8px; font-weight:700; cursor:pointer; outline:none; font-size:13px; flex-shrink:0;">
-                <option value="1080">1080p Ultra HD</option>
-                <option value="720">720p HD</option>
-            </select>
-        </div>
-
-        <div class="video-grid" id="mainVideoGrid">
-            <!-- Video kutular dinamik olarak JS ile eklenir -->
-        </div>
-    </div>
-
-    <!-- CHAT PANEL -->
-    <div class="chat-panel">
-        <div class="chat-header">
-            <span>💬 Takım Sohbeti</span>
-        </div>
-        <div class="chat-messages" id="mesajGecmisi">
-            <div style="text-align:center; color:#949ba4; font-size:12px; margin-top:10px; font-weight:600; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px;">
-                🔒 Şifreli sohbet aktif. Hoş geldiniz!
+            <div class="top-bar-left">
+                <i class="fas fa-volume-up" style="color:var(--renk-gri); font-size:16px;"></i>
+                <span style="color:#fff; font-weight:800; font-size:15px;">genel</span>
+                <div class="top-bar-divider"></div>
+                <span id="aktifKonusanInfo" style="color:var(--renk-basari); font-size:12px; font-weight:700;"></span>
+            </div>
+            <div class="top-bar-right">
+                <select id="kaliteSecici" style="background:#1e1f22; color:#dbdee1; border:1px solid #4e5058; padding:5px 10px; border-radius:4px; font-weight:700; cursor:pointer; outline:none; font-size:13px;">
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                </select>
+                <div class="top-bar-divider"></div>
+                <input type="text" class="search-box" placeholder="🔍 Ara..." id="aramaKutusu">
+                <button style="background:none; border:none; color:var(--renk-gri); cursor:pointer; padding:6px; border-radius:4px; font-size:15px; transition:0.1s;" title="İpuçları" onclick="document.getElementById('ipucuModal').style.display='flex'" onmouseenter="this.style.color='#dbdee1'" onmouseleave="this.style.color='var(--renk-gri)'">
+                    <i class="fas fa-question-circle"></i>
+                </button>
             </div>
         </div>
-        <div class="chat-input-box">
-            <label for="dosyaSecici" title="Dosya Gönder" style="cursor:pointer;">
-                <i class="fas fa-plus-circle chat-icon-btn" style="font-size:18px; color:#b5bac1; transition:0.2s;"></i>
-            </label>
-            <input type="file" id="dosyaSecici" style="display:none;" accept="image/*">
-            <button id="emojiAcBtn" class="chat-icon-btn" title="Emoji Ekle"><i class="fas fa-smile"></i></button>
-            <input type="text" id="mesajKutusu" placeholder="Mesaj gönder...">
-            <button id="mesajGonderBtn" class="chat-icon-btn" style="color:var(--renk-aktif); font-size:18px;" title="Gönder"><i class="fas fa-paper-plane"></i></button>
-            <div id="emojiPickerPanel" class="emoji-picker"></div>
+        <div class="video-area">
+            <div class="video-grid" id="mainVideoGrid"></div>
         </div>
     </div>
 
-    <!-- MOBILE PTT BUTTON -->
-    <div id="mobilePttBtn" title="Bas ve Konuş"><i class="fas fa-microphone"></i></div>
+    <!-- ── SOHBET PANELİ ── -->
+    <div class="chat-panel">
+        <div class="chat-header">
+            <span style="display:flex; align-items:center; gap:6px;">
+                <i class="fas fa-hashtag" style="color:var(--renk-gri); font-size:16px;"></i> genel
+            </span>
+        </div>
 
-    <!-- MOBILE BOTTOM NAV -->
+        <!-- Sekme çubuğu -->
+        <div class="chat-sekme-bar">
+            <button class="chat-sekme aktif" id="sekme-genel" onclick="chatSekmeDegistir('genel')">
+                # Genel
+            </button>
+            <button class="chat-sekme" id="sekme-dm" onclick="chatSekmeDegistir('dm')">
+                <i class="fas fa-envelope" style="font-size:11px;"></i> Özel
+                <span id="dmUnreadBadge" style="display:none; background:var(--renk-tehlike); color:white; font-size:9px; min-width:14px; height:14px; border-radius:7px; align-items:center; justify-content:center; padding:0 3px; margin-left:3px;"></span>
+            </button>
+        </div>
+
+        <!-- Genel Kanal -->
+        <div id="genelChatPanel" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+            <div class="chat-messages" id="mesajGecmisi">
+                <div style="text-align:center; color:var(--renk-gri); font-size:13px; padding:20px 0;">
+                    <div style="font-size:40px; margin-bottom:8px;">👋</div>
+                    <div style="font-weight:700; color:#dbdee1; margin-bottom:4px;">#genel kanalının başlangıcı</div>
+                    <div style="font-size:12px;">Bascord'a hoş geldiniz!</div>
+                </div>
+            </div>
+            <div class="yaziyor-indicator" id="yaziyorGosterge"></div>
+            <div class="chat-input-area" style="position:relative;">
+                <div class="chat-input-box">
+                    <label for="dosyaSecici" style="cursor:pointer; display:flex; align-items:center;" title="Dosya Ekle">
+                        <i class="chat-icon-btn fas fa-plus-circle"></i>
+                    </label>
+                    <input type="file" id="dosyaSecici" style="display:none;" accept="image/*,video/*,.pdf,.txt,.zip">
+                    <input type="text" id="mesajKutusu" placeholder="# genel kanalına mesaj gönder">
+                    <button id="emojiAcBtn" class="chat-icon-btn" title="Emoji"><i class="fas fa-smile"></i></button>
+                    <button id="mesajGonderBtn" class="chat-icon-btn" style="color:var(--renk-aktif);" title="Gönder"><i class="fas fa-paper-plane"></i></button>
+                </div>
+                <div id="emojiPickerPanel" class="emoji-picker"></div>
+            </div>
+        </div>
+
+        <!-- DM Paneli -->
+        <div id="dmChatPanel" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+            <div style="padding:8px 12px; font-size:11px; color:var(--renk-gri); font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #1f2123; flex-shrink:0;">
+                Odadaki Kişiler
+            </div>
+            <div id="dmKisiListesi" class="dm-kisi-liste"></div>
+            <div id="dmMesajBolumu" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:6px;">
+                <div style="text-align:center; color:var(--renk-gri); font-size:12px; margin-top:20px;">← Bir kişi seç</div>
+            </div>
+            <div class="chat-input-area" id="dmInputBox" style="display:none;">
+                <div class="chat-input-box">
+                    <input type="text" id="dmInput" placeholder="Özel mesaj gönder...">
+                    <button id="dmGonderBtnInline" class="chat-icon-btn" style="color:var(--renk-aktif);"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── MOBİL ── -->
+    <div id="mobilePttBtn"><i class="fas fa-microphone"></i></div>
     <div id="mobile-bottom-nav" class="mobile-nav">
-        <button class="nav-btn active" id="nav-kameralar" onclick="sekmeDegistir('kameralar')">
-            <i class="fas fa-video"></i>
-            <span>Yayınlar</span>
-        </button>
+        <button class="nav-btn active" id="nav-kameralar" onclick="sekmeDegistir('kameralar')"><i class="fas fa-video"></i><span>Yayınlar</span></button>
         <button class="nav-btn" id="nav-sohbet" onclick="sekmeDegistir('sohbet')">
             <i class="fas fa-comment-dots"></i>
-            <div class="chat-badge" id="chatGostergeBadge">0</div>
+            <div class="chat-badge" id="chatGostergeBadge" style="position:absolute; top:6px; right:22%;"></div>
             <span>Sohbet</span>
         </button>
-        <button class="nav-btn" id="nav-ayarlar" onclick="sekmeDegistir('ayarlar')">
-            <i class="fas fa-bars"></i>
-            <span>Menü</span>
-        </button>
-    </div>
-
-    <!-- DİYAGNOSTİK PANEL (Ctrl+Shift+D) -->
-    <div id="diagPanel">
-        <div id="diagHeader">
-            <span>🔍 Bascord Diyagnostik (Ctrl+Shift+D)</span>
-            <button id="diagClear" onclick="document.getElementById('diagLogs').innerHTML='';diagLogs=[]">Temizle</button>
-        </div>
-        <div id="diagLogs"></div>
+        <button class="nav-btn" id="nav-ayarlar" onclick="sekmeDegistir('ayarlar')"><i class="fas fa-bars"></i><span>Menü</span></button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
