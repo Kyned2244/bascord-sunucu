@@ -1,17 +1,21 @@
 {
   "name": "bascord",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Bascord Premium Ses ve Ekran Paylaşım Uygulaması",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron .",
+    "build": "electron-packager . Bascord --platform=win32 --arch=x64 --out=dist --overwrite --icon=icon.ico"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-packager": "^17.1.2"
   }
 }
